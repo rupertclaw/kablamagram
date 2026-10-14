@@ -191,11 +191,6 @@ function getWordsFromGrid(throughCells) {
   return found;
 }
 
-function getLongestWord() {
-  const arr = getWordsFromGrid();
-  return arr.length ? arr[0] : null;
-}
-
 const pending = [];
 let chainStarted = false;
 let lastSwapCells = null; // cells of the player's swap; chain words must also flow through fresh tiles but count as chain once ANY new word appears from cascade
@@ -224,10 +219,10 @@ async function processQueue() {
     }
   }
   render(); await sleep(240);
-  cascade();
+  const changed = cascade();
   render(); await sleep(240);
-  // check chain: cascades may have created new valid words
-  const more = getWordsFromGrid();
+  // check chain: only words through the cells the cascade REFILLED count
+  const more = getWordsFromGrid(changed);
   if (more.length) {
     for (const m of more) pending.push(m);
   }
@@ -236,6 +231,7 @@ async function processQueue() {
 }
 
 function cascade() {
+  const changed = []; // cells that received a new (refilled) letter this cascade
   for (let c = 0; c < COLS; c++) {
     let stack = [];
     for (let r = ROWS - 1; r >= 0; r--) {
@@ -243,9 +239,11 @@ function cascade() {
     }
     for (let r = ROWS - 1; r >= 0; r--) {
       const i = ROWS - 1 - r;
-      grid[r][c] = i < stack.length ? stack[i] : randLetter();
+      if (i >= stack.length) { grid[r][c] = randLetter(); changed.push([r, c]); }
+      else grid[r][c] = stack[i];
     }
   }
+  return changed;
 }
 
 function finishTurn() {
