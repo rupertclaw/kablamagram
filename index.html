@@ -157,36 +157,48 @@ function onTileClick(e) {
   }
 }
 
+// Boggle matching: all 8 directions, no cell reuse, prefix-pruned DFS
+const PREFIXES = new Set();
+for (const w of WORDS) for (let l = 1; l <= w.length; l++) PREFIXES.add(w.slice(0, l));
+const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+const MAX_WORD_LEN = 8;
+
 function getWordsFromGrid(throughCells) {
-  const found = [];
-  // horizontal strings left-to-right at every start point
+  const pathsByWord = new Map();
+  function dfs(r, c, str, path, used) {
+    if (!PREFIXES.has(str)) return; // prune: no word starts with this
+    if (str.length >= 3 && WORDS.has(str)) {
+      if (!pathsByWord.has(str)) pathsByWord.set(str, []);
+      if (pathsByWord.get(str).length < 8) pathsByWord.get(str).push(path.slice());
+    }
+    if (str.length >= MAX_WORD_LEN) return;
+    for (const [dr, dc] of DIRS) {
+      const r2 = r + dr, c2 = c + dc;
+      if (r2 < 0 || r2 >= ROWS || c2 < 0 || c2 >= COLS) continue;
+      const k = r2 + ',' + c2;
+      if (used.has(k)) continue;
+      used.add(k);
+      dfs(r2, c2, str + grid[r2][c2], [...path, [r2, c2]], used);
+      used.delete(k);
+    }
+  }
   for (let r = 0; r < ROWS; r++) {
-    let s = '';
-    for (let c = 0; c < COLS; c++) { s += grid[r][c]; }
-    for (let i = 0; i < s.length; i++) {
-      for (let j = i + 2; j <= s.length; j++) {
-        const sub = s.slice(i, j).toLowerCase();
-        if (!WORDS.has(sub)) continue;
-        // If throughCells given, word must include at least one of them
-        if (throughCells && !throughCells.some(([tr, tc]) => tr === r && tc >= i && tc < j)) continue;
-        found.push({word: sub, r1: r, c1: i, r2: r, c2: j - 1});
-      }
+    for (let c = 0; c < COLS; c++) {
+      dfs(r, c, grid[r][c], [[r, c]], new Set([r + ',' + c]));
     }
   }
-  // vertical strings top-to-bottom
-  for (let c = 0; c < COLS; c++) {
-    let s = '';
-    for (let r = 0; r < ROWS; r++) { s += grid[r][c]; }
-    for (let i = 0; i < s.length; i++) {
-      for (let j = i + 2; j <= s.length; j++) {
-        const sub = s.slice(i, j).toLowerCase();
-        if (!WORDS.has(sub)) continue;
-        if (throughCells && !throughCells.some(([tr, tc]) => tc === c && tr >= i && tr < j)) continue;
-        found.push({word: sub, r1: i, c1: c, r2: j - 1, c2: c});
-      }
+  const found = [];
+  for (const [w, paths] of pathsByWord) {
+    let pick = paths[0];
+    if (throughCells) {
+      // word counts only if SOME valid path passes through a swapped/changed cell
+      const through = paths.find(p => p.some(([pr, pc]) =>
+        throughCells.some(([tr, tc]) => tr === pr && pc === tc)));
+      if (!through) continue;
+      pick = through;
     }
+    found.push({word: w, cells: pick});
   }
-  // longest first
   found.sort((a, b) => b.word.length - a.word.length);
   return found;
 }
@@ -212,17 +224,15 @@ async function processQueue() {
   wordsMade.push({word: match.word, pts, source: isChain ? 'chain' : 'swap'});
   updateWordsPanel();
   feedback('"' + match.word.toUpperCase() + '" +' + pts + ' pts' + (isChain ? ' CHAIN x2!' : ''), 'good');
-  // clear cells
-  for (let r = match.r1; r <= match.r2; r++) {
-    for (let c = match.c1; c <= match.c2; c++) {
-      grid[r][c] = null;
-    }
+  // clear cells (Boggle path, not a rectangle)
+  for (const [cr, cc] of match.cells) {
+    grid[cr][cc] = null;
   }
   render(); await sleep(240);
   const changed = cascade();
   render(); await sleep(240);
-  // check chain: only words through the cells the cascade REFILLED count
-  const more = getWordsFromGrid(changed);
+  // check chain: only words through the cells the cascade REFILLED, and only 4+ letters
+  const more = chainWordsFor(changed);
   if (more.length) {
     for (const m of more) pending.push(m);
   }
@@ -244,6 +254,12 @@ function cascade() {
     }
   }
   return changed;
+}
+
+const CHAIN_MIN_LENGTH = 4; // auto-chains only fire on 4+ letter words: 3-letter chains flood the board
+
+function chainWordsFor(changedCells) {
+  return getWordsFromGrid(changedCells).filter(m => m.word.length >= CHAIN_MIN_LENGTH);
 }
 
 function finishTurn() {
