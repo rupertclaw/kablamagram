@@ -43,6 +43,11 @@ button:active { transform: scale(0.96); }
 .game-over { background: rgba(0,0,0,0.6); border-radius: 12px; padding: 16px 24px; text-align: center; margin-top: 10px; display: none; }
 .game-over.show { display: block; }
 .dict-mode { font-size: 0.7rem; opacity: 0.6; margin-top: 8px; text-align: center; }
+details.words-made { margin-top: 8px; background: rgba(255,255,255,0.12); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; max-width: 340px; width: 100%; }
+details.words-made summary { cursor: pointer; font-weight: bold; list-style-position: inside; }
+details.words-made .word-entry { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
+details.words-made .word-entry:last-child { border-bottom: none; }
+details.words-made .pts { opacity: 0.8; }
 </style>
 </head>
 <body>
@@ -63,6 +68,7 @@ button:active { transform: scale(0.96); }
   <button id="hintBtn">Hint</button>
   <button id="newBtn">New Game</button>
 </div>
+<details class="words-made" id="wordsMade"><summary>Words made (0)</summary><div id="wordsList"><div class="word-entry"><span>None yet</span><span class="pts"></span></div></div></details>
 <div class="message-banner" id="banner"></div>
 <div class="game-over" id="gameOver">
   <b>No more valid moves!</b><br>
@@ -78,6 +84,7 @@ const WORDS = new Set("the,and,for,that,this,with,you,not,are,from,your,all,have
 
 let grid = [], score = 0, streak = 0, moves = 0, selected = null;
 let dictOnline = false, over = false;
+let wordsMade = []; // {word, pts, source: 'swap'|'chain'}
 
 const boardEl = document.getElementById('board');
 const currentWordEl = document.getElementById('currentWord');
@@ -87,9 +94,20 @@ const bannerEl = document.getElementById('banner');
 function newGame() {
   grid = Array.from({length: ROWS}, () => Array.from({length: COLS}, () => randLetter()));
   score = 0; streak = 0; moves = 0; over = false;
+  wordsMade = [];
+  updateWordsPanel();
   document.getElementById('gameOver').classList.remove('show');
   while (!findValidMoves()) { grid = Array.from({length: ROWS}, () => Array.from({length: COLS}, () => randLetter())); }
   render();
+}
+
+function updateWordsPanel() {
+  const sum = document.querySelector('#wordsMade summary');
+  const list = document.getElementById('wordsList');
+  sum.textContent = 'Words made (' + wordsMade.length + ')';
+  list.innerHTML = wordsMade.length
+    ? wordsMade.map(w => '<div class="word-entry"><span>' + w.word.toUpperCase() + (w.source === 'chain' ? ' <small>(chain)</small>' : '') + '</span><span class="pts">+' + w.pts + '</span></div>').join('')
+    : '<div class="word-entry"><span>None yet</span><span class="pts"></span></div>';
 }
 
 function randLetter() {
@@ -125,8 +143,10 @@ function onTileClick(e) {
       // swap
       const tmp = grid[sr][sc]; grid[sr][sc] = grid[r][c]; grid[r][c] = tmp;
       selected = null; moves++;
-      const word = getWordsFromGrid()[0] || null;
-      if (word) { handleMatch(); } else { streak = 0; feedback('No word formed', 'bad'); render(); }
+      // Only words passing through the two swapped tiles count as YOUR move
+      const word = getWordsFromGrid([[sr, sc], [r, c]])[0] || null;
+      if (word) { lastSwapCells = [[sr, sc], [r, c]]; handleMatch(); }
+      else { streak = 0; feedback('No word formed', 'bad'); render(); }
     } else {
       selected = [r, c];
       render();
@@ -137,7 +157,7 @@ function onTileClick(e) {
   }
 }
 
-function getWordsFromGrid() {
+function getWordsFromGrid(throughCells) {
   const found = [];
   // horizontal strings left-to-right at every start point
   for (let r = 0; r < ROWS; r++) {
@@ -146,7 +166,10 @@ function getWordsFromGrid() {
     for (let i = 0; i < s.length; i++) {
       for (let j = i + 2; j <= s.length; j++) {
         const sub = s.slice(i, j).toLowerCase();
-        if (WORDS.has(sub)) found.push({word: sub, r1: r, c1: i, r2: r, c2: j - 1});
+        if (!WORDS.has(sub)) continue;
+        // If throughCells given, word must include at least one of them
+        if (throughCells && !throughCells.some(([tr, tc]) => tr === r && tc >= i && tc < j)) continue;
+        found.push({word: sub, r1: r, c1: i, r2: r, c2: j - 1});
       }
     }
   }
@@ -157,7 +180,9 @@ function getWordsFromGrid() {
     for (let i = 0; i < s.length; i++) {
       for (let j = i + 2; j <= s.length; j++) {
         const sub = s.slice(i, j).toLowerCase();
-        if (WORDS.has(sub)) found.push({word: sub, r1: i, c1: c, r2: j - 1, c2: c});
+        if (!WORDS.has(sub)) continue;
+        if (throughCells && !throughCells.some(([tr, tc]) => tc === c && tr >= i && tr < j)) continue;
+        found.push({word: sub, r1: i, c1: c, r2: j - 1, c2: c});
       }
     }
   }
@@ -173,9 +198,11 @@ function getLongestWord() {
 
 const pending = [];
 let chainStarted = false;
+let lastSwapCells = null; // cells of the player's swap; chain words must also flow through fresh tiles but count as chain once ANY new word appears from cascade
 function handleMatch() {
-  pending.push(...getWordsFromGrid()); // queue ALL current valid words
-  streak++;                            // one successful swap = +1 streak; chains extend via score, not streak
+  pending.push(...getWordsFromGrid(lastSwapCells)); // only words through the player's swapped tiles
+  lastSwapCells = null;                             // later queue entries are chain words (from cascades)
+  streak++;                                         // one successful swap = +1 streak
   chainStarted = false;
   processQueue();
 }
@@ -183,10 +210,13 @@ function handleMatch() {
 async function processQueue() {
   const match = pending.shift();
   if (!match) return;
-  chainStarted = true; // chains beyond the first clear contribute to score, not streak
-  const pts = match.word.length * match.word.length;
+  const isChain = chainStarted;
+  chainStarted = true; // only the first clear (the player's word) isn't a chain
+  const pts = match.word.length * match.word.length * (isChain ? 2 : 1);
   score += pts;
-  feedback('"' + match.word.toUpperCase() + '" +' + pts + ' pts', 'good');
+  wordsMade.push({word: match.word, pts, source: isChain ? 'chain' : 'swap'});
+  updateWordsPanel();
+  feedback('"' + match.word.toUpperCase() + '" +' + pts + ' pts' + (isChain ? ' CHAIN x2!' : ''), 'good');
   // clear cells
   for (let r = match.r1; r <= match.r2; r++) {
     for (let c = match.c1; c <= match.c2; c++) {
@@ -240,7 +270,7 @@ function findValidMoves() {
         const a = grid[r][c], b = grid[r2][c2];
         if (a === b) continue;
         grid[r][c] = b; grid[r2][c2] = a;
-        const found = getWordsFromGrid().length > 0;
+        const found = getWordsFromGrid([[r, c], [r2, c2]]).length > 0;
         grid[r][c] = a; grid[r2][c2] = b;
         if (found) return true;
       }
@@ -298,7 +328,7 @@ document.getElementById('hintBtn').onclick = () => {
         if (grid[r][c] === grid[r2][c2]) continue;
         const a = grid[r][c], b = grid[r2][c2];
         grid[r][c] = b; grid[r2][c2] = a;
-        const has = getWordsFromGrid().length > 0;
+        const has = getWordsFromGrid([[r, c], [r2, c2]]).length > 0;
         grid[r][c] = a; grid[r2][c2] = b;
         if (has) {
           const cells = document.querySelectorAll('.tile');
