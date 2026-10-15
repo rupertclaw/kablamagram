@@ -12,6 +12,29 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Kablamagram">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- Google Analytics (GA4). Only loads on the real site, so local testing never pollutes the reports.
+     Consent Mode by region: analytics cookies everywhere except the EU/EEA, UK and Switzerland, where
+     Google only gets cookieless pings (no cookies). Never any ad cookies. Players can opt out entirely
+     on the privacy page. -->
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag() { dataLayer.push(arguments); }
+const GA_ID = 'G-FTF1MR21RP';
+const GA_LIVE = /(^|\.)kablamagram\.com$/.test(location.hostname);
+gtag('consent', 'default', {analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'});
+gtag('consent', 'default', {analytics_storage: 'denied', region: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT',
+  'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH']});
+let gaOptedOut = false;
+try { gaOptedOut = JSON.parse(localStorage.getItem('wordcrush.v1') || '{}').analytics === false; } catch (e) {}
+if (gaOptedOut) window['ga-disable-' + GA_ID] = true; // send nothing at all
+if (GA_LIVE && !gaOptedOut) {
+  gtag('js', new Date());
+  gtag('config', GA_ID);
+  const s = document.createElement('script');
+  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
+  document.head.appendChild(s);
+}
+</script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -164,6 +187,14 @@ button.sound-btn {
   position: absolute; top: 10px; right: 58px; z-index: 20; width: 40px; height: 40px; padding: 0; margin: 0;
   border-radius: 50%; font-size: 1.1rem; text-shadow: none;
 }
+.consent {
+  position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 40; display: none; margin: 0 auto; max-width: 420px;
+  padding: 12px 14px; border-radius: 14px; background: #2f1f66; border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5); font-size: 0.85rem; text-align: center;
+}
+.consent.show { display: block; }
+.consent a { color: #ffe27a; }
+.consent button { margin: 10px 4px 2px; padding: 8px 16px; font-size: 0.9rem; }
 .over-buttons { display: flex; gap: 8px; justify-content: center; }
 .over-buttons button { margin: 10px 0 4px; }
 button.install-btn {
@@ -245,6 +276,11 @@ details.words-made .pts { opacity: 0.8; }
 <div class="message-banner" id="banner"></div>
 <button class="help-btn" id="helpBtn" aria-label="How to play">?</button>
 <button class="sound-btn" id="soundBtn" aria-label="Sound on">&#x1F50A;</button>
+<div class="consent" id="notice" role="status">
+  Your scores are saved on this device and stay until you clear your browser data.
+  We collect anonymous usage stats to improve the game. <a href="privacy.html">Privacy</a>
+  <div><button class="primary" id="noticeOk">Got it</button></div>
+</div>
 <button class="install-btn" id="installBtn">&#x2B07; Install</button>
 <div class="help" id="installHelp">
   <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="installTitle">
@@ -297,6 +333,7 @@ details.words-made .pts { opacity: 0.8; }
     <p>Your high score for each mode and your longest word ever are saved on this device.</p>
 
     <button class="primary" id="helpClose">Let's play!</button>
+    <p style="text-align:center; font-size:0.8rem; margin-top:6px"><a href="privacy.html" style="color:#ffe27a">Privacy</a></p>
   </div>
 </div>
 <div class="dict-mode" id="dictMode">Offline mode (bundled wordlist)</div>
@@ -320,7 +357,12 @@ function loadStore() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
 }
 function saveStore() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* storage blocked: records just won't persist */ }
+  try {
+    // the analytics opt-out belongs to the privacy page: keep whatever it last saved
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+    if ('analytics' in saved) store.analytics = saved.analytics; else delete store.analytics;
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch (e) { /* storage blocked: records just won't persist */ }
 }
 const store = loadStore();
 store.highScores = store.highScores || {};
@@ -353,6 +395,9 @@ const BLAST_PTS = 5; // per tile a bomb blows up
 function randomGrid() {
   return Array.from({length: ROWS}, () => Array.from({length: COLS}, () => newTile(randLetter())));
 }
+
+// Analytics events (GA4, set up in <head>). Off the live site gtag only queues them locally.
+function track(name, params = {}) { gtag('event', name, params); }
 
 // Sound effects, synthesised with Web Audio: no files to download, works offline.
 // The audio context starts on the first tap (browsers block sound before a user gesture).
@@ -422,6 +467,7 @@ function newGame() {
     : 'Tap touching letters to spell a word &middot; submit to score &middot; used tiles drop away';
   bannerEl.textContent = MODES[mode].seconds ? 'The clock starts on your first tap' : '';
   render();
+  track('game_start', {mode, swaps: swapsOn});
 }
 
 function endGame() {
@@ -441,6 +487,7 @@ function endGame() {
   document.getElementById('shareBtn').textContent = 'Share';
   document.getElementById('gameOver').classList.add('show');
   Sound.end(score > startHigh);
+  track('game_over', {mode, swaps: swapsOn, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh});
 }
 
 // Wordle-style result: a keycap number per word (with a bomb if one went off), a swirl per swap
@@ -457,6 +504,7 @@ function shareText() {
 // Phones get their own share sheet; elsewhere the result is copied to the clipboard
 async function shareResult() {
   const btn = document.getElementById('shareBtn'), text = shareText();
+  track('share', {method: navigator.share ? 'share_sheet' : 'clipboard', content_type: 'result'});
   if (navigator.share) {
     try { await navigator.share({text}); } catch (e) { /* closed the share sheet */ }
     return;
@@ -679,6 +727,8 @@ async function submitWord() {
   wordsMade.push({word, pts});
   moveLog.push({len: word.length, bomb: blast.length > 0});
   Sound.good();
+  track('word_scored', {mode, length: word.length, points: pts});
+  if (earned) track('power_tile', {type: earned});
   updateWordsPanel();
   feedback(word.toUpperCase() + ' +' + pts + ' pts' + (mult > 1 ? ' (×' + mult + ')' : '')
     + (blast.length ? ' · BOOM!' : '') + recordScore(word), 'good');
@@ -859,6 +909,15 @@ soundBtn.onclick = () => {
   store.sound = store.sound === false; saveStore();
   showSoundState();
   Sound.tap(5);
+  track('sound_toggle', {on: store.sound});
+};
+
+// One-time notice about saved scores and anonymous stats
+const noticeEl = document.getElementById('notice');
+if (!store.seenNotice) noticeEl.classList.add('show');
+document.getElementById('noticeOk').onclick = () => {
+  noticeEl.classList.remove('show');
+  store.seenNotice = true; saveStore();
 };
 showSoundState();
 const leaveGame = () => !moves || over || confirm('Leave this game and start a new one?');
@@ -882,7 +941,10 @@ function closeHelp() {
   document.querySelectorAll('.help.show').forEach(h => h.classList.remove('show'));
   if (!store.seenHelp) { store.seenHelp = true; saveStore(); }
 }
-document.getElementById('helpBtn').onclick = () => { helpEl.classList.add('show'); helpEl.querySelector('.help-card').scrollTop = 0; };
+document.getElementById('helpBtn').onclick = () => {
+  helpEl.classList.add('show'); helpEl.querySelector('.help-card').scrollTop = 0;
+  track('help_open');
+};
 document.getElementById('helpClose').onclick = closeHelp;
 helpEl.onclick = e => { if (e.target === helpEl) closeHelp(); }; // tap outside the card
 if (!store.seenHelp) helpEl.classList.add('show');
@@ -897,11 +959,14 @@ const isMobile = isIos || /android/i.test(navigator.userAgent);
 let installPrompt = null;
 function updateInstallBtn() { installBtn.classList.toggle('show', !isInstalled() && (!!installPrompt || isMobile)); }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; updateInstallBtn(); });
-window.addEventListener('appinstalled', () => { installPrompt = null; installBtn.classList.remove('show'); });
+window.addEventListener('appinstalled', () => { installPrompt = null; installBtn.classList.remove('show'); track('app_installed'); });
+if (isInstalled()) track('opened_as_app');
 installBtn.onclick = async () => {
+  track('install_click', {method: installPrompt ? 'prompt' : isIos ? 'ios_steps' : 'menu_steps'});
   if (installPrompt) {
     installPrompt.prompt();
-    await installPrompt.userChoice;
+    const choice = await installPrompt.userChoice;
+    track('install_prompt', {outcome: choice.outcome});
     installPrompt = null; // a prompt can only be used once; Chrome sends a fresh one later if they declined
     updateInstallBtn();
     return;
