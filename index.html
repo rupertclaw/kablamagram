@@ -146,6 +146,30 @@ button:disabled { opacity: 0.4; cursor: default; }
 .word-row { margin-top: 8px; }
 .reset-row { margin-top: 0; }
 .powers-key { font-size: 0.72rem; opacity: 0.85; margin-top: 4px; text-align: center; }
+/* How to play */
+button.help-btn {
+  --top: #ffe27a; --bot: #ffb300; --edge: #b37400; color: #5a3b00; text-shadow: none;
+  position: fixed; top: 10px; right: 10px; z-index: 20; width: 40px; height: 40px; padding: 0; margin: 0;
+  border-radius: 50%; font-size: 1.3rem; font-weight: 900;
+}
+.help {
+  position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(15,8,40,0.7);
+}
+.help.show { display: flex; }
+.help-card {
+  width: 100%; max-width: 380px; max-height: calc(100vh - 32px); overflow-y: auto; padding: 18px 18px 14px;
+  border-radius: 18px; background: linear-gradient(180deg, #5b3fa8, #3f2a80); border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5); font-size: 0.9rem; line-height: 1.45;
+}
+.help-card h2 { font-size: 1.4rem; text-align: center; margin-bottom: 10px; }
+.help-card h3 { font-size: 1rem; color: #ffe27a; margin: 12px 0 3px; }
+.help-card p, .help-card li { opacity: 0.95; }
+.help-card ul { padding-left: 18px; }
+.help-card b { color: #fff; }
+.help-power { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.help-power .tile { width: 46px; flex: none; font-size: 20px; cursor: default; }
+.help-card .primary { display: block; margin: 14px auto 4px; }
 .dict-mode { font-size: 0.7rem; opacity: 0.6; margin-top: 8px; text-align: center; }
 details.words-made { margin-top: 8px; background: rgba(255,255,255,0.12); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; max-width: 340px; width: 100%; }
 details.words-made summary { cursor: pointer; font-weight: bold; list-style-position: inside; }
@@ -193,6 +217,40 @@ details.words-made .pts { opacity: 0.8; }
 <div class="records" id="records"></div>
 <details class="words-made" id="wordsMade"><summary>Words made (0)</summary><div id="wordsList"><div class="word-entry"><span>None yet</span><span class="pts"></span></div></div></details>
 <div class="message-banner" id="banner"></div>
+<button class="help-btn" id="helpBtn" aria-label="How to play">?</button>
+<div class="help" id="help">
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">How to play</h2>
+
+    <h3>Spell words</h3>
+    <p>Tap letters that <b>touch</b> (sideways, up, down or diagonally) to spell a word of <b>3 or more letters</b>. Each tile can only be used once per word. Then press <b>Submit</b>.</p>
+    <p>Made a mistake? Tap a picked tile to go back to it, or use <b>Undo</b> and <b>Clear</b>.</p>
+
+    <h3>Score</h3>
+    <p>Longer words score far more: a word is worth its <b>length &times; length</b>. 3 letters = 9 points, 5 = 25, 8 = 64. Each word only counts once per game. Used tiles explode and new letters fall in from the top.</p>
+
+    <h3>Swap tiles</h3>
+    <p><b>Swipe</b> a tile onto any neighbour to swap them. A swap never scores by itself, but it can set up a much longer word. You can even swap while spelling. (Turn swapping off with the switch under the modes.)</p>
+
+    <h3>Modes</h3>
+    <ul>
+      <li><b>10 moves</b>: every word and every swap uses a move. Your last move must be a word.</li>
+      <li><b>2 minutes</b>: the clock starts on your first tap and pauses while tiles explode.</li>
+      <li><b>Endless</b>: no limit, just play.</li>
+    </ul>
+
+    <h3>Power tiles</h3>
+    <p>Long words leave a power tile where the word ended:</p>
+    <div class="help-power"><div class="tile power-wild">?</div><div><b>Wildcard</b> (6-letter word). Stands for any letter you need.</div></div>
+    <div class="help-power"><div class="tile power-x2">E</div><div><b>Double</b> (7-letter word). A word using it scores &times;2. Two in one word score &times;4!</div></div>
+    <div class="help-power"><div class="tile power-bomb">R</div><div><b>Bomb</b> (8-letter word). Use it in a word to blast all the tiles around it, +5 points each.</div></div>
+
+    <h3>Records</h3>
+    <p>Your high score for each mode and your longest word ever are saved on this device.</p>
+
+    <button class="primary" id="helpClose">Let's play!</button>
+  </div>
+</div>
 <div class="dict-mode" id="dictMode">Offline mode (bundled wordlist)</div>
 
 <script>
@@ -323,7 +381,7 @@ let lastTick = performance.now();
 setInterval(() => {
   const now = performance.now(), dt = now - lastTick;
   lastTick = now;
-  if (!MODES[mode].seconds || !clockStarted || over || busy) return;
+  if (!MODES[mode].seconds || !clockStarted || over || busy || helpOpen()) return;
   timeLeft = Math.max(0, timeLeft - dt);
   renderStats();
   if (timeLeft === 0) endGame();
@@ -671,7 +729,20 @@ document.getElementById('swapToggle').onchange = e => {
   newGame();
 };
 
+// How to play: opens by itself on a player's first visit; the 2-minute clock waits while it's open
+const helpEl = document.getElementById('help');
+function helpOpen() { return helpEl.classList.contains('show'); }
+function closeHelp() {
+  helpEl.classList.remove('show');
+  if (!store.seenHelp) { store.seenHelp = true; saveStore(); }
+}
+document.getElementById('helpBtn').onclick = () => { helpEl.classList.add('show'); helpEl.querySelector('.help-card').scrollTop = 0; };
+document.getElementById('helpClose').onclick = closeHelp;
+helpEl.onclick = e => { if (e.target === helpEl) closeHelp(); }; // tap outside the card
+if (!store.seenHelp) helpEl.classList.add('show');
+
 document.addEventListener('keydown', e => {
+  if (helpOpen()) { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeHelp(); } return; }
   if (e.key === 'Enter') { e.preventDefault(); submitWord(); }
   else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
   else if (e.key === 'Escape') clearWord();
