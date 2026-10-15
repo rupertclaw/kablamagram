@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Word Crush — Prototype</title>
+<title>Kablamagram</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -22,7 +22,7 @@ h1 { font-size: 1.2rem; margin-top: 6px; }
   box-shadow: inset 0 3px 10px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.15);
 }
 .mode-row { display: flex; gap: 4px; margin-top: 6px; background: rgba(255,255,255,0.12); border-radius: 10px; padding: 3px; }
-.mode-row button { margin: 0; padding: 6px 12px; font-size: 0.8rem; background: transparent; box-shadow: none; }
+.mode-row button { margin: 0; padding: 6px 12px; font-size: 0.8rem; background: transparent; box-shadow: none; text-shadow: none; }
 .mode-row button.active { background: white; color: #764ba2; font-weight: bold; box-shadow: 0 2px 0 rgba(30,15,70,0.35); }
 .records { font-size: 0.75rem; opacity: 0.85; margin-top: 6px; text-align: center; }
 .game-over {
@@ -61,6 +61,20 @@ h1 { font-size: 1.2rem; margin-top: 6px; }
   background: linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0.06));
 }
 .tile:empty { visibility: hidden; } /* a cleared cell waiting for the fall */
+/* power tiles, earned by long words (picked/hint/cleared colours below still override them) */
+.tile.power-wild { --top: #e08bff; --bot: #9b2fe0; --edge: #5f1a96; animation: wild-glow 1.6s ease-in-out infinite; }
+@keyframes wild-glow { 50% { filter: brightness(1.2) saturate(1.2); } }
+.tile.power-x2 { --top: #74c8ff; --bot: #1f78d8; --edge: #0d4a96; }
+.tile.power-bomb { --top: #6a6a7c; --bot: #24242e; --edge: #08080c; }
+.tile.power-x2::after, .tile.power-bomb::after {
+  position: absolute; top: 3px; right: 3px; font-size: 0.42em; line-height: 1; text-shadow: none; pointer-events: none;
+  background: #ffd54f; color: #5a3b00; border-radius: 6px; padding: 2px 4px; font-weight: 900;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.35);
+}
+.tile.power-x2::after { content: '\00d7' '2'; }
+.tile.power-bomb::after { content: '\1f4a3'; padding: 2px 3px; }
+.tile.spawn { animation: tile-spawn 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+@keyframes tile-spawn { from { transform: scale(0) rotate(-30deg); } }
 /* picked tiles turn gold and press down into the tray */
 .tile.picked {
   --top: #ffd56b; --bot: #f3a312; --edge: #b36b00;
@@ -94,30 +108,45 @@ h1 { font-size: 1.2rem; margin-top: 6px; }
   100% { transform: translateY(0); }
 }
 @keyframes shard-fly { to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.3); opacity: 0; } }
-.score-row { display: flex; gap: 8px; margin-top: 8px; font-size: 0.8rem; }
-.stat { background: rgba(255,255,255,0.15); padding: 6px 12px; border-radius: 8px; }
+.score-row { display: flex; gap: 8px; margin-top: 10px; width: 100%; max-width: 340px; }
+.stat {
+  flex: 1; display: flex; flex-direction: column; align-items: center; padding: 5px 6px 6px; border-radius: 12px;
+  background: rgba(20,10,50,0.32); border: 1px solid rgba(255,255,255,0.2); box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
+}
+.stat-label { font-size: 0.62rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.75; }
+.stat-value { font-size: 1.4rem; font-weight: 900; line-height: 1.15; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+.stat-value.bump { animation: stat-bump 0.4s ease-out; }
+@keyframes stat-bump { 40% { transform: scale(1.3); color: #ffe27a; } }
 .current-word { min-height: 34px; font-weight: bold; margin-top: 6px; font-size: 1.5rem; letter-spacing: 3px; }
 .current-word.empty { font-size: 0.9rem; font-weight: normal; letter-spacing: 0; opacity: 0.6; line-height: 34px; }
 .feedback { min-height: 20px; font-size: 0.85rem; margin-top: 2px; opacity: 0.9; }
 .feedback.good { color: #2ecc71; }
 .feedback.bad { color: #ff6b6b; }
 .message-banner { min-height: 18px; font-size: 0.75rem; opacity: 0.7; margin-top: 4px; text-align: center; }
+/* 3-D candy buttons, same recipe as the tiles: each colour class just sets --top/--bot/--edge */
 button {
-  background: rgba(255,255,255,0.22); border: none; color: white; padding: 10px 16px;
-  border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin: 4px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 3px 0 rgba(30,15,70,0.45);
+  --top: rgba(255,255,255,0.34); --bot: rgba(255,255,255,0.16); --edge: rgba(30,15,70,0.5);
+  border: none; color: white; padding: 11px 18px; margin: 5px 4px 8px;
+  border-radius: 12px; font-size: 1rem; font-weight: 800; cursor: pointer;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+  background: linear-gradient(180deg, var(--top), var(--bot));
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 4px 0 var(--edge), 0 6px 10px rgba(0,0,0,0.3);
   transition: transform 0.08s, box-shadow 0.08s;
 }
-button:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 0 rgba(30,15,70,0.45); }
-button.primary {
-  background: linear-gradient(180deg, #5fe08e, #27ae60); font-weight: 800; padding: 10px 24px;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.2);
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 3px 0 #1a7a42;
+button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 1px 0 var(--edge), 0 2px 4px rgba(0,0,0,0.3);
 }
-button.primary:active:not(:disabled) { box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), 0 1px 0 #1a7a42; }
+button.primary { --top: #6ee59a; --bot: #27ae60; --edge: #1a7a42; padding: 11px 28px; font-size: 1.1rem; }
+.btn-blue   { --top: #74c8ff; --bot: #1e88e5; --edge: #0d5aa7; }
+.btn-pink   { --top: #ff8fc8; --bot: #e8407f; --edge: #a3194f; }
+.btn-teal   { --top: #6fe3ef; --bot: #14a3b8; --edge: #0b6c7a; }
+.btn-yellow { --top: #ffe27a; --bot: #ffb300; --edge: #b37400; color: #5a3b00; text-shadow: 0 1px 0 rgba(255,255,255,0.4); }
+.btn-orange { --top: #ffb27a; --bot: #f3722c; --edge: #a8460f; }
 button:disabled { opacity: 0.4; cursor: default; }
 .word-row { margin-top: 8px; }
-.reset-row { margin-top: 2px; }
+.reset-row { margin-top: 0; }
+.powers-key { font-size: 0.72rem; opacity: 0.85; margin-top: 4px; text-align: center; }
 .dict-mode { font-size: 0.7rem; opacity: 0.6; margin-top: 8px; text-align: center; }
 details.words-made { margin-top: 8px; background: rgba(255,255,255,0.12); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; max-width: 340px; width: 100%; }
 details.words-made summary { cursor: pointer; font-weight: bold; list-style-position: inside; }
@@ -127,7 +156,7 @@ details.words-made .pts { opacity: 0.8; }
 </style>
 </head>
 <body>
-<h1>WORD CRUSH</h1>
+<h1>KABLAMAGRAM</h1>
 <div class="subtitle" id="subtitle"></div>
 <div class="mode-row" id="modeRow">
   <button data-mode="endless">Endless</button>
@@ -135,6 +164,11 @@ details.words-made .pts { opacity: 0.8; }
   <button data-mode="timed">2 minutes</button>
 </div>
 <label class="swap-toggle"><input type="checkbox" id="swapToggle"> Swipe to swap tiles</label>
+<div class="score-row">
+  <div class="stat"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span></div>
+  <div class="stat"><span class="stat-label" id="progressLabel">Moves</span><span class="stat-value" id="progress">0</span></div>
+  <div class="stat"><span class="stat-label">High</span><span class="stat-value" id="high">0</span></div>
+</div>
 <div class="current-word" id="currentWord"></div>
 <div class="feedback" id="feedback"></div>
 <div class="board-wrap">
@@ -148,21 +182,17 @@ details.words-made .pts { opacity: 0.8; }
   </div>
 </div>
 <div class="word-row">
-  <button id="undoBtn">Undo</button>
-  <button id="clearBtn">Clear</button>
+  <button id="undoBtn" class="btn-blue">Undo</button>
+  <button id="clearBtn" class="btn-pink">Clear</button>
   <button id="submitBtn" class="primary">Submit</button>
 </div>
-<div class="score-row">
-  <div class="stat" id="score">Score: 0</div>
-  <div class="stat" id="progress">Words: 0</div>
-  <div class="stat" id="high">High: 0</div>
-</div>
-<div class="records" id="records"></div>
 <div class="reset-row">
-  <button id="shuffleBtn">Shuffle</button>
-  <button id="hintBtn">Hint</button>
-  <button id="newBtn">New Game</button>
+  <button id="shuffleBtn" class="btn-teal">Shuffle</button>
+  <button id="hintBtn" class="btn-yellow">Hint</button>
+  <button id="newBtn" class="btn-orange">New Game</button>
 </div>
+<div class="powers-key">Long words leave power tiles: 6 letters &rarr; <b>?</b> wildcard &middot; 7 &rarr; <b>&times;2</b> score &middot; 8 &rarr; &#x1F4A3; bomb</div>
+<div class="records" id="records"></div>
 <details class="words-made" id="wordsMade"><summary>Words made (0)</summary><div id="wordsList"><div class="word-entry"><span>None yet</span><span class="pts"></span></div></div></details>
 <div class="message-banner" id="banner"></div>
 <div class="dict-mode" id="dictMode">Offline mode (bundled wordlist)</div>
@@ -208,8 +238,15 @@ const feedbackEl = document.getElementById('feedback');
 const bannerEl = document.getElementById('banner');
 const submitBtn = document.getElementById('submitBtn');
 
+// A tile is {l: letter, p: power}. Power is null, 'wild' (letter '?', stands for any letter),
+// 'x2' (doubles the word's score) or 'bomb' (also blasts the tiles around it).
+function newTile(l, p = null) { return {l, p}; }
+const POWER_FOR_LENGTH = {6: 'wild', 7: 'x2', 8: 'bomb'};
+const POWER_NAMES = {wild: 'a ? wildcard (any letter)', x2: 'a ×2 tile (doubles a word)', bomb: 'a bomb (blasts its neighbours)'};
+const BLAST_PTS = 5; // per tile a bomb blows up
+
 function randomGrid() {
-  return Array.from({length: ROWS}, () => Array.from({length: COLS}, () => randLetter()));
+  return Array.from({length: ROWS}, () => Array.from({length: COLS}, () => newTile(randLetter())));
 }
 
 function newGame() {
@@ -265,13 +302,18 @@ function formatTime(ms) {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
 
+let shownScore = 0;
 function renderStats() {
   const m = MODES[mode];
-  document.getElementById('score').textContent = 'Score: ' + score;
-  document.getElementById('progress').textContent = m.seconds ? 'Time: ' + formatTime(timeLeft)
-    : m.moveLimit ? 'Moves: ' + moves + ' / ' + m.moveLimit
-    : 'Words: ' + wordsMade.length;
-  document.getElementById('high').textContent = 'High: ' + (store.highScores[scoreKey()] || 0);
+  const scoreEl = document.getElementById('score');
+  scoreEl.textContent = score;
+  if (score > shownScore) { scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump'); }
+  shownScore = score;
+  document.getElementById('progressLabel').textContent = m.seconds ? 'Time' : m.moveLimit ? 'Moves' : 'Words';
+  document.getElementById('progress').textContent = m.seconds ? formatTime(timeLeft)
+    : m.moveLimit ? moves + ' / ' + m.moveLimit
+    : wordsMade.length;
+  document.getElementById('high').textContent = store.highScores[scoreKey()] || 0;
   const lw = store.longestWord;
   document.getElementById('records').textContent = lw
     ? 'Longest word ever: ' + lw.word.toUpperCase() + ' (' + lw.word.length + ' letters, ' + new Date(lw.date).toLocaleDateString() + ')'
@@ -304,7 +346,7 @@ function randLetter() {
 }
 
 function pathIndex(r, c) { return path.findIndex(([pr, pc]) => pr === r && pc === c); }
-function currentWord() { return path.map(([r, c]) => grid[r][c]).join(''); }
+function currentWord() { return path.map(([r, c]) => grid[r][c].l).join(''); }
 function isAdjacent([r1, c1], [r2, c2]) { return Math.abs(r1 - r2) <= 1 && Math.abs(c1 - c2) <= 1; }
 
 // opts: clearing (word tiles go green), drops (rows each tile fell), slides ({'r,c': [dr, dc]} a swapped tile came from)
@@ -316,7 +358,9 @@ function render({clearing, drops, slides} = {}) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const d = document.createElement('div');
+      const tile = grid[r][c];
       let cls = 'tile';
+      if (tile && tile.p) cls += ' power-' + tile.p;
       if (pathIndex(r, c) >= 0) cls += clearing ? ' word-cleared' : ' picked';
       if (!clearing && last && last[0] === r && last[1] === c) cls += ' last';
       if (drops && drops[r][c]) {
@@ -331,7 +375,7 @@ function render({clearing, drops, slides} = {}) {
         d.style.setProperty('--sx', slide[1]);
       }
       d.className = cls;
-      d.textContent = grid[r][c] || '';
+      d.textContent = tile ? tile.l : '';
       d.dataset.r = r; d.dataset.c = c;
       boardEl.appendChild(d);
     }
@@ -363,7 +407,8 @@ function tapTile(r, c) {
 async function swapTiles(r1, c1, r2, c2) {
   if (busy || over || !swapsOn) return;
   if (r2 < 0 || r2 >= ROWS || c2 < 0 || c2 >= COLS) return;
-  if (grid[r1][c1] === grid[r2][c2]) return; // same letter: nothing would change
+  const a = grid[r1][c1], b = grid[r2][c2];
+  if (a.l === b.l && a.p === b.p) return; // identical tiles: nothing would change
   const limit = MODES[mode].moveLimit;
   if (limit && moves === limit - 1) { feedback('Last move: spell a word!', 'bad'); return; }
   clockStarted = true;
@@ -400,25 +445,71 @@ boardEl.addEventListener('pointerup', () => {
 });
 boardEl.addEventListener('pointercancel', () => { gesture = null; });
 
+// Fill any wildcards ('?') with the first letters that make a dictionary word not found yet.
+// Returns {word} on success, else {dupe} if the only words that fit were already found.
+function resolveWord(typed) {
+  let dupe = null;
+  function fill(i, s) {
+    if (i === typed.length) {
+      if (!WORDS.has(s)) return null;
+      if (wordsMade.some(w => w.word === s)) { dupe = dupe || s; return null; }
+      return s;
+    }
+    for (const ch of typed[i] === '?' ? 'abcdefghijklmnopqrstuvwxyz' : typed[i]) {
+      if (!PREFIXES.has(s + ch)) continue;
+      const w = fill(i + 1, s + ch);
+      if (w) return w;
+    }
+    return null;
+  }
+  return {word: fill(0, ''), dupe};
+}
+
 async function submitWord() {
   if (busy || over || !path.length) return;
-  const word = currentWord().toLowerCase();
-  if (word.length < 3) { feedback('Words need at least 3 letters', 'bad'); return; }
-  if (!WORDS.has(word)) { feedback(word.toUpperCase() + ' is not in the dictionary', 'bad'); return; }
-  if (wordsMade.some(w => w.word === word)) { feedback('Already found ' + word.toUpperCase(), 'bad'); return; }
-  const pts = word.length * word.length;
+  const typed = currentWord().toLowerCase();
+  if (typed.length < 3) { feedback('Words need at least 3 letters', 'bad'); return; }
+  const {word, dupe} = resolveWord(typed);
+  if (!word) {
+    const shown = typed.toUpperCase();
+    feedback(dupe ? 'Already found ' + dupe.toUpperCase()
+      : typed.includes('?') ? 'No word fits ' + shown : shown + ' is not in the dictionary', 'bad');
+    return;
+  }
+  // power tiles in the word: each x2 doubles it, each bomb blasts its neighbours outside the word
+  const used = path.map(([r, c]) => grid[r][c]);
+  const mult = 2 ** used.filter(t => t.p === 'x2').length;
+  const blast = [];
+  for (const [r, c] of path) {
+    if (grid[r][c].p !== 'bomb') continue;
+    for (const [dr, dc] of DIRS) {
+      const r2 = r + dr, c2 = c + dc;
+      if (r2 < 0 || r2 >= ROWS || c2 < 0 || c2 >= COLS || pathIndex(r2, c2) >= 0) continue;
+      if (!blast.some(([br, bc]) => br === r2 && bc === c2)) blast.push([r2, c2]);
+    }
+  }
+  const pts = word.length * word.length * mult + blast.length * BLAST_PTS;
+  const earned = POWER_FOR_LENGTH[word.length];
   score += pts;
   moves++;
   wordsMade.push({word, pts});
   updateWordsPanel();
-  feedback(word.toUpperCase() + ' +' + pts + ' pts' + recordScore(word), 'good');
+  feedback(word.toUpperCase() + ' +' + pts + ' pts' + (mult > 1 ? ' (×' + mult + ')' : '')
+    + (blast.length ? ' · BOOM!' : '') + recordScore(word), 'good');
+  bannerEl.textContent = earned ? word.toUpperCase() + ' earned ' + POWER_NAMES[earned] + '!' : '';
   busy = true;
   render({clearing: true}); await sleep(200);
   for (const [r, c] of path) { explodeTile(r, c); await sleep(200); } // one by one, in spelling order
+  if (blast.length) { for (const [r, c] of blast) explodeTile(r, c); await sleep(250); }
   await sleep(550);
-  for (const [r, c] of path) grid[r][c] = null;
+  const [lr, lc] = path[path.length - 1];
+  for (const [r, c] of [...path, ...blast]) grid[r][c] = null;
+  // the earned power tile appears where the word ended (keeping that letter), then falls with the rest
+  if (earned) grid[lr][lc] = earned === 'wild' ? newTile('?', 'wild') : newTile(word[word.length - 1].toUpperCase(), earned);
   path = [];
-  render(); await sleep(150);
+  render();
+  if (earned) { boardEl.children[lr * COLS + lc].classList.add('spawn'); await sleep(500); }
+  else await sleep(150);
   const drops = cascade();
   if (!reduceMotion) {
     render({drops});
@@ -453,13 +544,13 @@ function getWordsFromGrid() {
       const k = r2 + ',' + c2;
       if (used.has(k)) continue;
       used.add(k);
-      dfs(r2, c2, str + grid[r2][c2].toLowerCase(), [...path, [r2, c2]], used);
+      dfs(r2, c2, str + grid[r2][c2].l.toLowerCase(), [...path, [r2, c2]], used);
       used.delete(k);
     }
   }
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      dfs(r, c, grid[r][c].toLowerCase(), [[r, c]], new Set([r + ',' + c]));
+      dfs(r, c, grid[r][c].l.toLowerCase(), [[r, c]], new Set([r + ',' + c]));
     }
   }
   const found = [];
@@ -491,6 +582,7 @@ function explodeTile(r, c) {
     s.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
     s.style.setProperty('--rot', Math.round(Math.random() * 360) + 'deg');
     s.addEventListener('animationend', () => s.remove());
+    setTimeout(() => s.remove(), 1500); // backup: animations don't finish while the page is hidden
     document.body.appendChild(s);
   }
 }
@@ -500,7 +592,7 @@ function explodeTile(r, c) {
 function cascade() {
   const drops = Array.from({length: ROWS}, () => Array(COLS).fill(0));
   for (let c = 0; c < COLS; c++) {
-    const stack = []; // surviving [letter, oldRow], bottom first
+    const stack = []; // surviving [tile, oldRow], bottom first
     for (let r = ROWS - 1; r >= 0; r--) {
       if (grid[r][c] !== null) stack.push([grid[r][c], r]);
     }
@@ -508,7 +600,7 @@ function cascade() {
     for (let r = ROWS - 1; r >= 0; r--) {
       const i = ROWS - 1 - r;
       if (i < stack.length) { grid[r][c] = stack[i][0]; drops[r][c] = r - stack[i][1]; }
-      else { grid[r][c] = randLetter(); drops[r][c] = fresh; }
+      else { grid[r][c] = newTile(randLetter()); drops[r][c] = fresh; }
     }
   }
   return drops;
