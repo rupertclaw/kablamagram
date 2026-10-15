@@ -61,7 +61,7 @@ h1 { font-size: 1.2rem; margin-top: 6px; }
   background: linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0.06));
 }
 .tile:empty { visibility: hidden; } /* a cleared cell waiting for the fall */
-/* power tiles, earned by long words (picked/hint/cleared colours below still override them) */
+/* power tiles, earned by long words (picked/cleared colours below still override them) */
 .tile.power-wild { --top: #e08bff; --bot: #9b2fe0; --edge: #5f1a96; animation: wild-glow 1.6s ease-in-out infinite; }
 @keyframes wild-glow { 50% { filter: brightness(1.2) saturate(1.2); } }
 .tile.power-x2 { --top: #74c8ff; --bot: #1f78d8; --edge: #0d4a96; }
@@ -82,7 +82,6 @@ h1 { font-size: 1.2rem; margin-top: 6px; }
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -2px 0 rgba(0,0,0,0.12), 0 1px 0 var(--edge), 0 2px 4px rgba(0,0,0,0.3);
 }
 .tile.last { outline: 3px solid white; outline-offset: -3px; }
-.tile.hint { --top: #6ee59a; --bot: #27ae60; --edge: #1a7a42; }
 .tile.word-cleared { --top: #6ee59a; --bot: #27ae60; --edge: #1a7a42; transform: translateY(3px); }
 .tile.explode { animation: tile-explode 0.6s ease-out forwards; }
 @keyframes tile-explode {
@@ -188,7 +187,6 @@ details.words-made .pts { opacity: 0.8; }
 </div>
 <div class="reset-row">
   <button id="shuffleBtn" class="btn-teal">Shuffle</button>
-  <button id="hintBtn" class="btn-yellow">Hint</button>
   <button id="newBtn" class="btn-orange">New Game</button>
 </div>
 <div class="powers-key">Long words leave power tiles: 6 letters &rarr; <b>?</b> wildcard &middot; 7 &rarr; <b>&times;2</b> score &middot; 8 &rarr; &#x1F4A3; bomb</div>
@@ -531,7 +529,7 @@ for (const w of WORDS) for (let l = 1; l <= w.length; l++) PREFIXES.add(w.slice(
 const DIRS = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
 const MAX_WORD_LEN = 8;
 
-// Every word on the board (used for Hint and to make sure the board is playable)
+// Every word on the board (used to make sure the board is playable)
 function getWordsFromGrid() {
   const pathsByWord = new Map();
   function dfs(r, c, str, path, used) {
@@ -656,19 +654,6 @@ document.getElementById('shuffleBtn').onclick = () => {
   shuffleUntilPlayable();
   path = []; bannerEl.textContent = '';
   render();
-};
-document.getElementById('hintBtn').onclick = () => {
-  if (busy || over) return;
-  // point at where a word starts (prefer 4+ letters) without spelling it out
-  const words = newWordsOnBoard();
-  if (!words.length) { bannerEl.textContent = 'No new words left, try Shuffle'; return; }
-  const long = words.filter(m => m.word.length >= 4);
-  const pool = long.length ? long : words;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
-  render();
-  const [r, c] = pick.cells[0];
-  boardEl.children[r * COLS + c].classList.add('hint');
-  bannerEl.textContent = 'A ' + pick.word.length + '-letter word starts on the green tile';
 };
 document.getElementById('newBtn').onclick = newGame;
 document.getElementById('againBtn').onclick = newGame;
