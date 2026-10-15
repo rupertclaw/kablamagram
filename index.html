@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Kablamagram</title>
+<meta name="description" content="A free word game. Spell words from touching letters, swap tiles to set up longer ones, and blow up the board. Plays in your browser, works offline.">
+<!-- Link previews (Facebook, WhatsApp, Messages, X...) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Kablamagram">
+<meta property="og:url" content="https://kablamagram.com/">
+<meta property="og:title" content="Kablamagram: spell, swap, kablam!">
+<meta property="og:description" content="A free word game. Spell words from touching letters, swap tiles to set up longer ones, and blow up the board. Plays in your browser, works offline.">
+<meta property="og:image" content="https://kablamagram.com/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="KABLAMAGRAM spelled in glossy candy letter tiles">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#667eea">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
@@ -259,6 +272,7 @@ details.words-made .pts { opacity: 0.8; }
       <button class="btn-blue" id="shareBtn">Share</button>
       <button class="primary" id="againBtn">Play again</button>
     </div>
+    <div class="detail" id="shareNote"></div>
   </div>
 </div>
 <div class="word-row">
@@ -484,33 +498,143 @@ function endGame() {
     ? plural(wordsMade.length, 'word') + (swapsOn ? ', ' + plural(swaps, 'swap') : '')
       + ' · best: ' + best.word.toUpperCase() + ' (+' + best.pts + ')'
     : 'No words this time';
-  document.getElementById('shareBtn').textContent = 'Share';
+  document.getElementById('shareNote').textContent = '';
+  prepareShareFile(score > startHigh);
   document.getElementById('gameOver').classList.add('show');
   Sound.end(score > startHigh);
   track('game_over', {mode, swaps: swapsOn, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh});
 }
 
+const SHARE_URL = 'https://kablamagram.com';
+const bestWord = () => wordsMade.reduce((b, w) => (!b || w.pts > b.pts ? w : b), null);
+
 // Wordle-style result: a keycap number per word (with a bomb if one went off), a swirl per swap
 function shareText() {
-  const best = wordsMade.reduce((b, w) => (!b || w.pts > b.pts ? w : b), null);
+  const best = bestWord();
   const keycap = n => n + '️⃣';
   const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A3}' : ''));
   return 'Kablamagram \u{1F4A5} ' + MODES[mode].label + (swapsOn ? '' : ' (no swaps)') + '\n'
     + score + ' points' + (best ? ' · best word ' + best.word.toUpperCase() + ' (+' + best.pts + ')' : '') + '\n'
-    + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n'
-    + 'https://kablamagram.com';
+    + (line.length ? 'My ' + line.length + ' moves: ' + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n' : '')
+    + 'Can you beat it? ' + SHARE_URL;
 }
 
-// Phones get their own share sheet; elsewhere the result is copied to the clipboard
-async function shareResult() {
-  const btn = document.getElementById('shareBtn'), text = shareText();
-  track('share', {method: navigator.share ? 'share_sheet' : 'clipboard', content_type: 'result'});
-  if (navigator.share) {
-    try { await navigator.share({text}); } catch (e) { /* closed the share sheet */ }
-    return;
+// ---- Share picture: Facebook and some other apps drop text a game pre-fills, but keep images ----
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+const TILE_RED = ['#ff7466', '#e0382a', '#a3241a'], TILE_TEAL = ['#6fe3ef', '#14a3b8', '#0b6c7a'], TILE_BOMB = ['#6a6a7c', '#24242e', '#08080c'];
+// a candy tile like the board's: shadow, darker edge, gradient face, gloss, embossed label
+function drawTile(ctx, x, y, s, label, [top, bot, edge], font) {
+  const r = s * 0.18, d = s * 0.08;
+  ctx.fillStyle = 'rgba(20,10,50,0.35)'; roundRectPath(ctx, x, y + d * 1.8, s, s, r); ctx.fill();
+  ctx.fillStyle = edge; roundRectPath(ctx, x, y + d, s, s, r); ctx.fill();
+  const g = ctx.createLinearGradient(0, y, 0, y + s);
+  g.addColorStop(0, top); g.addColorStop(1, bot);
+  ctx.fillStyle = g; roundRectPath(ctx, x, y, s, s, r); ctx.fill();
+  const gl = ctx.createLinearGradient(0, y, 0, y + s * 0.45);
+  gl.addColorStop(0, 'rgba(255,255,255,0.45)'); gl.addColorStop(1, 'rgba(255,255,255,0.06)');
+  ctx.fillStyle = gl; roundRectPath(ctx, x + s * 0.07, y + s * 0.05, s * 0.86, s * 0.42, r * 0.8); ctx.fill();
+  ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillText(label, x + s / 2, y + s / 2 + s * 0.05);
+  ctx.fillStyle = '#fff'; ctx.fillText(label, x + s / 2, y + s / 2 + s * 0.02);
+}
+
+function makeShareCanvas(newHigh) {
+  const W = 1080, H = 1350, cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const font = (w, px) => w + ' ' + px + 'px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  const spacing = px => { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; };
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#667eea'); bg.addColorStop(1, '#764ba2');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  // logo and mode
+  spacing(6); ctx.font = font(900, 96);
+  const lg = ctx.createLinearGradient(0, 70, 0, 160);
+  lg.addColorStop(0, '#fff6c8'); lg.addColorStop(0.55, '#ffd54f'); lg.addColorStop(1, '#e09a10');
+  ctx.fillStyle = 'rgba(40,20,80,0.45)'; ctx.fillText('KABLAMAGRAM', W / 2, 156);
+  ctx.fillStyle = lg; ctx.fillText('KABLAMAGRAM', W / 2, 150);
+  spacing(3); ctx.font = font(700, 40); ctx.fillStyle = '#e4dcff';
+  ctx.fillText((MODES[mode].label + (swapsOn ? '' : ' · no swaps')).toUpperCase(), W / 2, 222);
+  // score
+  spacing(0); ctx.font = font(900, 190); ctx.fillStyle = 'rgba(40,20,80,0.4)'; ctx.fillText(String(score), W / 2, 432);
+  ctx.fillStyle = '#fff'; ctx.fillText(String(score), W / 2, 424);
+  spacing(4); ctx.font = font(800, 44); ctx.fillStyle = '#ffe27a';
+  ctx.fillText(newHigh ? '★ POINTS · NEW HIGH SCORE ★' : 'POINTS', W / 2, 492);
+  // best word as tiles
+  const best = bestWord();
+  if (best) {
+    spacing(3); ctx.font = font(700, 38); ctx.fillStyle = '#e4dcff';
+    ctx.fillText('BEST WORD  +' + best.pts, W / 2, 600);
+    const letters = best.word.toUpperCase().split(''), gap = 12;
+    const s = Math.min(112, Math.floor((920 - gap * (letters.length - 1)) / letters.length));
+    let x = (W - (s * letters.length + gap * (letters.length - 1))) / 2;
+    spacing(0);
+    for (const ch of letters) { drawTile(ctx, x, 630, s, ch, TILE_RED, font(800, Math.round(s * 0.55))); x += s + gap; }
   }
-  try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied!'; }
-  catch (e) { window.prompt('Copy your result:', text); }
+  // my moves: a numbered tile per word (dark if a bomb went off), a teal swap tile per swap
+  if (moveLog.length) {
+    spacing(3); ctx.textBaseline = 'alphabetic'; ctx.font = font(700, 38); ctx.fillStyle = '#e4dcff';
+    ctx.fillText('MY ' + moveLog.length + ' MOVES', W / 2, 860);
+    spacing(0);
+    const shown = moveLog.slice(0, 20), perRow = 10, s = 78, gap = 12;
+    shown.forEach((m, i) => {
+      const row = Math.floor(i / perRow), inRow = Math.min(perRow, shown.length - row * perRow), col = i % perRow;
+      const x = (W - (s * inRow + gap * (inRow - 1))) / 2 + col * (s + gap), y = 890 + row * (s + 26);
+      if (m === 'swap') drawTile(ctx, x, y, s, '⇄', TILE_TEAL, font(800, 44));
+      else drawTile(ctx, x, y, s, String(m.len), m.bomb ? TILE_BOMB : TILE_RED, font(800, 42));
+    });
+  }
+  // footer
+  ctx.textBaseline = 'alphabetic'; spacing(1); ctx.font = font(800, 46); ctx.fillStyle = '#ffe27a';
+  ctx.fillText('Can you beat it?  kablamagram.com', W / 2, 1275);
+  return cv;
+}
+
+// Made when the game ends, so it's ready the instant Share is tapped (share sheets need the tap)
+let shareFile = null;
+function prepareShareFile(newHigh) {
+  shareFile = null;
+  try {
+    makeShareCanvas(newHigh).toBlob(b => { if (b) shareFile = new File([b], 'kablamagram-result.jpg', {type: 'image/jpeg'}); }, 'image/jpeg', 0.92);
+  } catch (e) { /* no picture: text share still works */ }
+}
+
+// Share: the picture through the phone's share sheet when it can take files; otherwise the text
+// via the share sheet or the clipboard, plus a Save image link
+async function shareResult() {
+  const text = shareText(), note = document.getElementById('shareNote');
+  if (shareFile && navigator.canShare && navigator.canShare({files: [shareFile]})) {
+    try { await navigator.share({files: [shareFile], text, title: 'Kablamagram'}); track('share', {method: 'image', content_type: 'result'}); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  if (navigator.share) {
+    try { await navigator.share({text}); track('share', {method: 'text', content_type: 'result'}); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  note.textContent = '';
+  try {
+    await navigator.clipboard.writeText(text);
+    note.textContent = 'Copied! Paste it anywhere.';
+    track('share', {method: 'clipboard', content_type: 'result'});
+  } catch (e) {
+    const ta = document.createElement('textarea'); // last resort: show the text to copy by hand
+    ta.value = text; ta.readOnly = true; ta.rows = 4; ta.style.width = '100%';
+    note.appendChild(ta); ta.select();
+  }
+  if (shareFile) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(shareFile); a.download = shareFile.name; a.textContent = 'Save image';
+    a.style.color = '#ffe27a';
+    a.onclick = () => track('share', {method: 'download', content_type: 'result'});
+    note.append(' · ', a);
+  }
 }
 
 // High scores are saved as they happen, so an abandoned game still counts
