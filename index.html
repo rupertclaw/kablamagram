@@ -281,8 +281,8 @@ details.words-made .pts { opacity: 0.8; }
   <button id="submitBtn" class="primary">Submit</button>
 </div>
 <div class="reset-row">
-  <button id="shuffleBtn" class="btn-teal">Shuffle</button>
   <button id="newBtn" class="btn-orange">New Game</button>
+  <button id="shuffleBtn" class="btn-teal">Shuffle</button>
 </div>
 <div class="powers-key">Long words leave power tiles: 6 letters &rarr; <b>?</b> wildcard &middot; 7 &rarr; <b>&times;2</b> score &middot; 8 &rarr; &#x1F4A3; bomb</div>
 <div class="records" id="records"></div>
@@ -296,6 +296,16 @@ details.words-made .pts { opacity: 0.8; }
   <div><button class="primary" id="noticeOk">Got it</button></div>
 </div>
 <button class="install-btn" id="installBtn">&#x2B07; Install</button>
+<div class="help" id="confirmBox">
+  <div class="help-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMsg" style="text-align:center">
+    <h2 id="confirmTitle">Start a new game?</h2>
+    <p id="confirmMsg"></p>
+    <div class="over-buttons">
+      <button class="btn-blue" id="confirmNo">Keep playing</button>
+      <button class="btn-orange" id="confirmYes">New game</button>
+    </div>
+  </div>
+</div>
 <div class="help" id="installHelp">
   <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="installTitle">
     <h2 id="installTitle">Install Kablamagram</h2>
@@ -1020,7 +1030,6 @@ document.getElementById('shuffleBtn').onclick = () => {
   Sound.shuffle();
   render();
 };
-document.getElementById('newBtn').onclick = newGame;
 document.getElementById('againBtn').onclick = newGame;
 document.getElementById('shareBtn').onclick = shareResult;
 const soundBtn = document.getElementById('soundBtn');
@@ -1044,18 +1053,43 @@ document.getElementById('noticeOk').onclick = () => {
   store.seenNotice = true; saveStore();
 };
 showSoundState();
-const leaveGame = () => !moves || over || confirm('Leave this game and start a new one?');
+// Anything that would throw away a game in progress asks first. "Keep playing" is the default:
+// Esc, Enter or a tap outside the box all keep the game.
+const confirmBox = document.getElementById('confirmBox');
+let confirmAction = null;
+function leaveGame(action) {
+  if (busy) return;
+  if (!moves || over) { action(); return; }
+  document.getElementById('confirmMsg').textContent = "You're " + moves + (moves === 1 ? ' move' : ' moves')
+    + ' into this game with ' + score + (score === 1 ? ' point' : ' points') + '. Starting again ends it.';
+  confirmAction = action;
+  confirmBox.classList.add('show');
+}
+document.getElementById('confirmYes').onclick = () => {
+  confirmBox.classList.remove('show');
+  const action = confirmAction; confirmAction = null;
+  if (action) action();
+};
+document.getElementById('confirmNo').onclick = closeHelp;
+confirmBox.onclick = e => { if (e.target === confirmBox) closeHelp(); };
+
+document.getElementById('newBtn').onclick = () => leaveGame(newGame);
 document.querySelectorAll('#modeRow button').forEach(b => b.onclick = () => {
-  if (busy || b.dataset.mode === mode || !leaveGame()) return;
-  mode = b.dataset.mode;
-  store.mode = mode; saveStore();
-  newGame();
+  if (b.dataset.mode === mode) return;
+  leaveGame(() => {
+    mode = b.dataset.mode;
+    store.mode = mode; saveStore();
+    newGame();
+  });
 });
 document.getElementById('swapToggle').onchange = e => {
-  if (busy || !leaveGame()) { e.target.checked = swapsOn; return; }
-  swapsOn = e.target.checked;
-  store.swaps = swapsOn; saveStore();
-  newGame();
+  const want = e.target.checked;
+  e.target.checked = swapsOn; // stays as it was unless they confirm
+  leaveGame(() => {
+    swapsOn = want;
+    store.swaps = swapsOn; saveStore();
+    newGame();
+  });
 };
 
 // How to play: opens by itself on a player's first visit; the 2-minute clock waits while it's open
