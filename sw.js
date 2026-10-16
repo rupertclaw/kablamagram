@@ -2,7 +2,8 @@
 // Network first, so a newly pushed version shows up straight away; the cached copy
 // is only used when there's no connection.
 const CACHE = 'kablamagram-v1';
-const FILES = ['./', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+// what offline play needs (the big 512px icons are only fetched when installing)
+const FILES = ['./', './manifest.webmanifest', './art/logo-banner.jpg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));

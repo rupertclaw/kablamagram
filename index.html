@@ -56,8 +56,18 @@ body {
   min-height: 100vh; display: flex; flex-direction: column; align-items: center;
   padding: 8px; color: white; touch-action: manipulation;
 }
-h1 { font-size: 1.2rem; margin-top: 2px; line-height: 44px; } /* same height as the Install / ? buttons beside it */
-.subtitle { font-size: 0.75rem; opacity: 0.85; margin-bottom: 4px; text-align: center; }
+/* header: sound button, comic logo banner, help button */
+.top-bar { display: flex; align-items: center; gap: 6px; width: 100%; max-width: 420px; }
+h1.logo { flex: 1; margin: 0; min-width: 0; display: flex; justify-content: center; }
+h1.logo img {
+  display: block; width: auto; max-width: 100%; max-height: 74px;
+  /* soft edges on all four sides so the banner melts into the purple */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 24%, #000 78%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 24%, #000 78%, transparent);
+  mask-composite: intersect;
+}
+.toggle-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; min-height: 30px; }
 /* recessed tray the tiles sit in */
 .board-wrap {
   position: relative; border-radius: 18px; padding: 10px 10px 14px; margin-top: 8px; flex: 0 0 auto; max-width: 340px; width: 100%;
@@ -140,7 +150,7 @@ h1 { font-size: 1.2rem; margin-top: 2px; line-height: 44px; } /* same height as 
 /* swapped tiles slide in from where they came from (--sx/--sy in cells) */
 .tile.slide { z-index: 1; animation: tile-slide 0.2s ease-out both; }
 @keyframes tile-slide { from { transform: translate(calc(var(--sx) * (100% + var(--gap))), calc(var(--sy) * (100% + var(--gap)))); } }
-.swap-toggle { font-size: 0.75rem; margin-top: 6px; display: flex; align-items: center; gap: 6px; cursor: pointer; opacity: 0.9; }
+.swap-toggle { font-size: 0.75rem; display: flex; align-items: center; gap: 6px; cursor: pointer; opacity: 0.9; }
 /* falling tiles start --drop rows higher (tile height + gap per row) and land with a small bounce */
 .board.falling { overflow: hidden; padding-bottom: 6px; margin-bottom: -6px; } /* keep the tiles' bottom edges visible */
 .tile.fall { animation: tile-fall var(--fall-time) cubic-bezier(0.45, 0, 0.8, 0.6) both; }
@@ -151,7 +161,7 @@ h1 { font-size: 1.2rem; margin-top: 2px; line-height: 44px; } /* same height as 
   100% { transform: translateY(0); }
 }
 @keyframes shard-fly { to { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.3); opacity: 0; } }
-.score-row { display: flex; gap: 8px; margin-top: 10px; width: 100%; max-width: 340px; }
+.score-row { display: flex; gap: 8px; margin-top: 8px; width: 100%; max-width: 340px; }
 .stat {
   flex: 1; display: flex; flex-direction: column; align-items: center; padding: 5px 6px 6px; border-radius: 12px;
   background: rgba(20,10,50,0.32); border: 1px solid rgba(255,255,255,0.2); box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
@@ -160,9 +170,9 @@ h1 { font-size: 1.2rem; margin-top: 2px; line-height: 44px; } /* same height as 
 .stat-value { font-size: 1.4rem; font-weight: 900; line-height: 1.15; text-shadow: 0 2px 0 rgba(0,0,0,0.25); }
 .stat-value.bump { animation: stat-bump 0.4s ease-out; }
 @keyframes stat-bump { 40% { transform: scale(1.3); color: #ffe27a; } }
-.current-word { min-height: 34px; font-weight: bold; margin-top: 6px; font-size: 1.5rem; letter-spacing: 3px; }
-.current-word.empty { font-size: 0.9rem; font-weight: normal; letter-spacing: 0; opacity: 0.6; line-height: 34px; }
-.feedback { min-height: 20px; font-size: 0.85rem; margin-top: 2px; opacity: 0.9; }
+.current-word { min-height: 30px; line-height: 30px; font-weight: bold; margin-top: 4px; font-size: 1.5rem; letter-spacing: 3px; }
+.current-word.empty { font-size: 0.9rem; font-weight: normal; letter-spacing: 0; opacity: 0.6; }
+.feedback { min-height: 18px; font-size: 0.85rem; margin-top: 0; opacity: 0.9; }
 .feedback.good { color: #2ecc71; }
 .feedback.bad { color: #ff6b6b; }
 .message-banner { min-height: 18px; font-size: 0.75rem; opacity: 0.7; margin-top: 4px; text-align: center; }
@@ -193,11 +203,11 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* How to play */
 button.help-btn {
   --top: #ffe27a; --bot: #ffb300; --edge: #b37400; color: #5a3b00; text-shadow: none;
-  position: absolute; top: 10px; right: 10px; z-index: 20; width: 40px; height: 40px; padding: 0; margin: 0;
+  flex: none; width: 40px; height: 40px; padding: 0; margin: 0 0 4px;
   border-radius: 50%; font-size: 1.3rem; font-weight: 900;
 }
 button.sound-btn {
-  position: absolute; top: 10px; right: 58px; z-index: 20; width: 40px; height: 40px; padding: 0; margin: 0;
+  flex: none; width: 40px; height: 40px; padding: 0; margin: 0 0 4px;
   border-radius: 50%; font-size: 1.1rem; text-shadow: none;
 }
 .consent {
@@ -212,8 +222,8 @@ button.sound-btn {
 .over-buttons button { margin: 10px 0 4px; }
 button.install-btn {
   --top: #6fe3ef; --bot: #14a3b8; --edge: #0b6c7a;
-  position: absolute; top: 10px; left: 10px; z-index: 20; margin: 0; padding: 0 12px; height: 40px;
-  border-radius: 20px; font-size: 0.85rem; display: none;
+  margin: 0 0 3px; padding: 0 12px; height: 30px;
+  border-radius: 15px; font-size: 0.78rem; display: none;
 }
 button.install-btn.show { display: block; }
 .install-steps { padding-left: 22px; }
@@ -246,14 +256,20 @@ details.words-made .pts { opacity: 0.8; }
 </style>
 </head>
 <body>
-<h1>KABLAMAGRAM</h1>
-<div class="subtitle" id="subtitle"></div>
+<div class="top-bar">
+  <button class="sound-btn" id="soundBtn" aria-label="Sound on">&#x1F50A;</button>
+  <h1 class="logo"><img src="art/logo-banner.jpg" alt="Kablamagram" width="660" height="238"></h1>
+  <button class="help-btn" id="helpBtn" aria-label="How to play">?</button>
+</div>
 <div class="mode-row" id="modeRow">
   <button data-mode="endless">Endless</button>
   <button data-mode="moves">10 moves</button>
   <button data-mode="timed">2 minutes</button>
 </div>
-<label class="swap-toggle"><input type="checkbox" id="swapToggle"> Swipe to swap tiles</label>
+<div class="toggle-row">
+  <label class="swap-toggle"><input type="checkbox" id="swapToggle"> Swipe to swap tiles</label>
+  <button class="install-btn" id="installBtn">&#x2B07; Install app</button>
+</div>
 <div class="score-row">
   <div class="stat"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span></div>
   <div class="stat"><span class="stat-label" id="progressLabel">Moves</span><span class="stat-value" id="progress">0</span></div>
@@ -288,14 +304,11 @@ details.words-made .pts { opacity: 0.8; }
 <div class="records" id="records"></div>
 <details class="words-made" id="wordsMade"><summary>Words made (0)</summary><div id="wordsList"><div class="word-entry"><span>None yet</span><span class="pts"></span></div></div></details>
 <div class="message-banner" id="banner"></div>
-<button class="help-btn" id="helpBtn" aria-label="How to play">?</button>
-<button class="sound-btn" id="soundBtn" aria-label="Sound on">&#x1F50A;</button>
 <div class="consent" id="notice" role="status">
   Your scores are saved on this device and stay until you clear your browser data.
   We collect anonymous usage stats to improve the game. <a href="privacy.html">Privacy</a>
   <div><button class="primary" id="noticeOk">Got it</button></div>
 </div>
-<button class="install-btn" id="installBtn">&#x2B07; Install</button>
 <div class="help" id="confirmBox">
   <div class="help-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMsg" style="text-align:center">
     <h2 id="confirmTitle">Start a new game?</h2>
@@ -504,9 +517,6 @@ function newGame() {
   document.getElementById('gameOver').classList.remove('show');
   document.querySelectorAll('#modeRow button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   document.getElementById('swapToggle').checked = swapsOn;
-  document.getElementById('subtitle').innerHTML = swapsOn
-    ? 'Tap touching letters to spell &middot; swipe a tile to swap it &middot; submit to score'
-    : 'Tap touching letters to spell a word &middot; submit to score &middot; used tiles drop away';
   bannerEl.textContent = MODES[mode].seconds ? 'The clock starts on your first tap' : '';
   render();
   track('game_start', {mode, swaps: swapsOn});
