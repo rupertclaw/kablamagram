@@ -360,7 +360,7 @@ details.words-made .pts { opacity: 0.8; }
     <p style="text-align:center; font-size:0.8rem; margin-top:6px"><a href="privacy.html" style="color:#ffe27a">Privacy</a></p>
   </div>
 </div>
-<div class="dict-mode" id="dictMode">Dictionary: 172,000+ words, built in, works offline</div>
+<div class="dict-mode" id="dictMode">Dictionary: 172,000+ words built in (works offline), plus Wiktionary when online</div>
 
 <script>
 const COLS = 5, ROWS = 6;
@@ -404,6 +404,8 @@ function saveStore() {
 }
 const store = loadStore();
 store.highScores = store.highScores || {};
+store.learned = store.learned || []; // words this device found on Wiktionary, so they work offline too
+for (const w of store.learned) WORDS.add(w);
 
 let grid = [], score = 0, moves = 0, busy = false, over = false;
 let path = [];      // [[r, c], ...] tiles the player has tapped, in order
@@ -850,11 +852,45 @@ function resolveWord(typed) {
   return {word: fill(0, ''), dupe};
 }
 
+// Online backup for words the built-in list lacks (favourite, gobsmacked, doomscroll...): ask Wiktionary,
+// and accept only ordinary English words. Names, abbreviations, symbols, misspellings and foreign words
+// don't count. Only 4+ letter words are checked (the list covers short words well, and it skips most
+// random taps). No key needed, and nothing but the word is sent.
+const ONLINE_POS = /^(noun|verb|adjective|adverb|interjection|pronoun|preposition|conjunction|determiner|article|numeral|participle)$/i;
+const NOT_A_WORD = /misspelling of|abbreviation of|initialism of|acronym of|letter-case form|form of [A-Z]{2,}\b/i;
+async function checkOnline(word) {
+  if (!navigator.onLine) return false;
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 4000);
+  try {
+    const r = await fetch('https://en.wiktionary.org/api/rest_v1/page/definition/' + encodeURIComponent(word), {signal: ctl.signal});
+    if (!r.ok) return false;
+    const entries = (await r.json()).en || [];
+    return entries.some(e => ONLINE_POS.test(e.partOfSpeech || '')
+      && (e.definitions || []).some(d => !NOT_A_WORD.test(String(d.definition || '').replace(/<[^>]*>/g, ''))));
+  } catch (e) {
+    return false; // offline, slow or blocked: treat as unknown
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function learnWord(word) {
+  WORDS.add(word);
+  if (!store.learned.includes(word)) { store.learned.push(word); if (store.learned.length > 500) store.learned.shift(); saveStore(); }
+}
+
 async function submitWord() {
   if (busy || over || !path.length) return;
   const typed = currentWord().toLowerCase();
   if (typed.length < 3) { feedback('Words need at least 3 letters', 'bad'); return; }
-  const {word, dupe} = resolveWord(typed);
+  let {word, dupe} = resolveWord(typed);
+  if (!word && !dupe && !typed.includes('?') && typed.length >= 4 && navigator.onLine) {
+    busy = true; render(); // the 2-minute clock waits while busy, so the lookup costs no time
+    feedback('Checking ' + typed.toUpperCase() + '…');
+    const found = await checkOnline(typed);
+    busy = false;
+    if (found) { learnWord(typed); word = typed; track('word_accepted_online', {word: typed, length: typed.length}); }
+    else render();
+  }
   if (!word) {
     const shown = typed.toUpperCase();
     feedback(dupe ? 'Already found ' + dupe.toUpperCase()
