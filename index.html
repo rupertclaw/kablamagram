@@ -27,8 +27,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <!-- Google Analytics (GA4). Only loads on the real site, so local testing never pollutes the reports.
      Consent Mode by region: analytics cookies everywhere except the EU/EEA, UK and Switzerland, where
-     Google only gets cookieless pings (no cookies). Never any ad cookies. Players can opt out entirely
-     on the privacy page. -->
+     Google only gets cookieless pings unless the player taps Allow on the consent prompt (shown to
+     anyone on a European time zone). Never any ad cookies. Players can opt out entirely on the
+     privacy page. -->
 <script>
 window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
@@ -37,9 +38,16 @@ const GA_LIVE = /(^|\.)kablamagram\.com$/.test(location.hostname);
 gtag('consent', 'default', {analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'});
 gtag('consent', 'default', {analytics_storage: 'denied', region: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT',
   'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH']});
-let gaOptedOut = false;
-try { gaOptedOut = JSON.parse(localStorage.getItem('wordcrush.v1') || '{}').analytics === false; } catch (e) {}
+// Google picks the region from the IP address; the page can't see that, so it uses the time zone
+// to decide who gets asked (Cyprus is Asia/Nicosia; a few non-EU European zones get asked too, harmlessly)
+let gaTimeZone = '';
+try { gaTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+const IN_EUROPE = /^(Europe\/|Atlantic\/(Canary|Madeira|Azores|Reykjavik|Faroe)|Asia\/(Nicosia|Famagusta))/.test(gaTimeZone);
+let gaPrefs = {};
+try { gaPrefs = JSON.parse(localStorage.getItem('wordcrush.v1') || '{}'); } catch (e) {}
+const gaOptedOut = gaPrefs.analytics === false;
 if (gaOptedOut) window['ga-disable-' + GA_ID] = true; // send nothing at all
+if (gaPrefs.consent === 'granted') gtag('consent', 'update', {analytics_storage: 'granted'});
 if (GA_LIVE && !gaOptedOut) {
   gtag('js', new Date());
   gtag('config', GA_ID);
@@ -304,6 +312,11 @@ details.words-made .pts { opacity: 0.8; }
 <div class="records" id="records"></div>
 <details class="words-made" id="wordsMade"><summary>Words made (0)</summary><div id="wordsList"><div class="word-entry"><span>None yet</span><span class="pts"></span></div></div></details>
 <div class="message-banner" id="banner"></div>
+<div class="consent" id="consentPrompt" role="dialog" aria-label="Analytics consent">
+  Your scores are saved on this device. Can we count your visit to help improve the game?
+  Anonymous stats, no ads, nothing sold. <a href="privacy.html">Privacy</a>
+  <div><button id="consentNo">No thanks</button><button class="primary" id="consentYes">Allow</button></div>
+</div>
 <div class="consent" id="notice" role="status">
   Your scores are saved on this device and stay until you clear your browser data.
   We collect anonymous usage stats to improve the game. <a href="privacy.html">Privacy</a>
@@ -409,9 +422,9 @@ function loadStore() {
 }
 function saveStore() {
   try {
-    // the analytics opt-out belongs to the privacy page: keep whatever it last saved
+    // the analytics opt-out and EU consent can also be changed on the privacy page: keep whatever was last saved
     const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
-    if ('analytics' in saved) store.analytics = saved.analytics; else delete store.analytics;
+    for (const k of ['analytics', 'consent']) { if (k in saved) store[k] = saved[k]; else delete store[k]; }
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   } catch (e) { /* storage blocked: records just won't persist */ }
 }
@@ -1102,9 +1115,27 @@ soundBtn.onclick = () => {
   track('sound_toggle', {on: store.sound});
 };
 
-// One-time notice about saved scores and anonymous stats
-const noticeEl = document.getElementById('notice');
-if (!store.seenNotice) noticeEl.classList.add('show');
+// First visit: in Europe, ask before using analytics cookies; elsewhere, a one-time notice.
+// The consent answer is written straight to storage (saveStore keeps the stored value, see above).
+const noticeEl = document.getElementById('notice'), consentEl = document.getElementById('consentPrompt');
+function setConsent(choice) {
+  store.consent = choice; store.seenNotice = true;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+    saved.consent = choice; saved.seenNotice = true;
+    localStorage.setItem(STORE_KEY, JSON.stringify(saved));
+  } catch (e) {}
+  saveStore();
+  consentEl.classList.remove('show');
+}
+if (IN_EUROPE && !store.consent && store.analytics !== false) consentEl.classList.add('show');
+else if (!store.seenNotice) noticeEl.classList.add('show');
+document.getElementById('consentYes').onclick = () => {
+  setConsent('granted');
+  gtag('consent', 'update', {analytics_storage: 'granted'});
+  track('analytics_consent', {choice: 'granted'});
+};
+document.getElementById('consentNo').onclick = () => setConsent('denied');
 document.getElementById('noticeOk').onclick = () => {
   noticeEl.classList.remove('show');
   store.seenNotice = true; saveStore();

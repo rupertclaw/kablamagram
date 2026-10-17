@@ -35,7 +35,7 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
 <main>
   <a class="back" href="./">&larr; Back to the game</a>
   <h1>Privacy</h1>
-  <p class="updated">Last updated 16 October 2026</p>
+  <p class="updated">Last updated 17 October 2026</p>
 
   <p><b>The short version:</b> Kablamagram has no accounts, no ads and never asks for your name or email. Your scores stay on your device. We count anonymous usage statistics to see how the game is played and make it better, and you can switch that off below.</p>
 
@@ -53,11 +53,12 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
   <p>We don't collect names, emails or anything that identifies you directly. The data is used only to improve Kablamagram. It is not sold, and it is not used for advertising.</p>
 
   <h2>Cookies</h2>
-  <p>Google Analytics sets cookies (named <code>_ga</code>) so it can tell one visit from another. If you're in the EU/EEA, the UK or Switzerland, no analytics cookies are set: Google only receives basic, cookieless signals that can't recognise you on a later visit.</p>
+  <p>Google Analytics sets cookies (named <code>_ga</code>) so it can tell one visit from another. If you're in the EU/EEA, the UK or Switzerland, analytics cookies are only used if you tap <b>Allow</b> when the game asks. Otherwise Google only receives basic, cookieless signals that can't recognise you on a later visit.</p>
 
   <h2>Your choice</h2>
   <div class="optout">
     <p id="optStatus">Checking&hellip;</p>
+    <button id="optAllow" hidden>Allow anonymous stats</button>
     <button id="optBtn" hidden></button>
   </div>
   <p style="margin-top:10px">This choice is saved on this device only. You can also use Google's <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener">browser opt-out add-on</a>.</p>
@@ -82,24 +83,40 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
   <p>Questions about privacy, or anything else? Email <a href="mailto:kablamagram@gmail.com">kablamagram@gmail.com</a>.</p>
 </main>
 <script>
-// Same storage the game uses ('wordcrush.v1'); analytics === false means opted out
+// Same storage the game uses ('wordcrush.v1'): analytics === false means opted out completely;
+// consent 'granted' / 'denied' is the answer to the game's prompt in Europe (same time-zone test as the game)
 const KEY = 'wordcrush.v1';
+let zone = ''; try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+const inEurope = /^(Europe\/|Atlantic\/(Canary|Madeira|Azores|Reykjavik|Faroe)|Asia\/(Nicosia|Famagusta))/.test(zone);
 function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
+function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} show(); }
+const statusEl = document.getElementById('optStatus'), main = document.getElementById('optBtn'), allow = document.getElementById('optAllow');
 function show() {
-  const out = load().analytics === false;
-  document.getElementById('optStatus').textContent = out
-    ? 'Analytics is OFF on this device. Nothing is sent to Google Analytics.'
-    : 'Analytics is ON on this device.';
-  const btn = document.getElementById('optBtn');
-  btn.textContent = out ? 'Turn analytics back on' : 'Turn off analytics';
-  btn.hidden = false;
-}
-document.getElementById('optBtn').onclick = () => {
   const s = load();
-  if (s.analytics === false) delete s.analytics; else s.analytics = false;
-  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
-  show();
+  allow.hidden = true; main.hidden = false;
+  if (s.analytics === false) {
+    statusEl.textContent = 'Analytics is OFF on this device. Nothing is sent to Google Analytics.';
+    main.textContent = 'Turn analytics back on';
+  } else if (inEurope && s.consent === 'granted') {
+    statusEl.textContent = 'You allowed anonymous stats with cookies on this device.';
+    main.textContent = 'Withdraw permission';
+  } else if (inEurope) {
+    statusEl.textContent = 'Anonymous stats without cookies on this device (you haven’t allowed cookies).';
+    main.textContent = 'Turn off analytics completely';
+    allow.hidden = false;
+  } else {
+    statusEl.textContent = 'Analytics is ON on this device.';
+    main.textContent = 'Turn off analytics';
+  }
+}
+main.onclick = () => {
+  const s = load();
+  if (s.analytics === false) delete s.analytics;
+  else if (inEurope && s.consent === 'granted') s.consent = 'denied';
+  else s.analytics = false;
+  save(s);
 };
+allow.onclick = () => { const s = load(); s.consent = 'granted'; s.seenNotice = true; save(s); };
 show();
 </script>
 </body>
