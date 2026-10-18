@@ -3,7 +3,7 @@
 // is only used when there's no connection.
 const CACHE = 'kablamagram-v1';
 // what offline play needs (the big 512px icons are only fetched when installing)
-const FILES = ['./', './manifest.webmanifest', './art/logo-banner.jpg', './icons/icon-192.png', './icons/apple-touch-icon.png'];
+const FILES = ['./', './manifest.webmanifest', './fonts/bangers-latin.woff2', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));

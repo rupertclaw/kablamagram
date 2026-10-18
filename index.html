@@ -66,15 +66,28 @@ body {
 }
 /* header: sound button, comic logo banner, help button */
 .top-bar { display: flex; align-items: center; gap: 6px; width: 100%; max-width: 420px; }
-h1.logo { flex: 1; margin: 0; min-width: 0; display: flex; justify-content: center; }
-h1.logo img {
-  display: block; width: auto; max-width: 100%; max-height: 74px;
-  /* soft edges on all four sides so the banner melts into the purple */
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 24%, #000 78%, transparent);
-  -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 24%, #000 78%, transparent);
-  mask-composite: intersect;
+/* Logo: comic lettering (Bangers, bundled so it works offline) with a 3-D extrusion built from
+   stacked text-shadows and bouncing letters; pops in when the game opens */
+@font-face { font-family: 'Bangers'; src: url('fonts/bangers-latin.woff2') format('woff2'); font-display: swap; }
+h1.logo {
+  position: relative; flex: 1; min-width: 0; margin: 0; height: 74px;
+  display: flex; align-items: center; justify-content: center;
+  animation: logo-pop 0.7s cubic-bezier(0.2, 1.5, 0.45, 1) both;
 }
+@keyframes logo-pop { from { transform: scale(0.2) rotate(-14deg); opacity: 0; } }
+.logo-text {
+  position: relative; display: flex; transform: rotate(-4deg);
+  font-family: 'Bangers', 'Impact', 'Arial Black', sans-serif; font-weight: 400;
+  font-size: clamp(34px, 10.8vw, 48px); line-height: 1; letter-spacing: 1.5px;
+  color: #ffe93d; -webkit-text-stroke: 2px #2a0d00; paint-order: stroke fill;
+  text-shadow:
+    1px 1px 0 #ffb300, 2px 2px 0 #ff9100, 3px 3px 0 #f57200, 4px 4px 0 #e05500,
+    5px 5px 0 #b83c00, 6px 6px 0 #7a2400, 7px 7px 0 #2a0d00,
+    8px 10px 10px rgba(20, 5, 40, 0.55);
+}
+.logo-text span { display: inline-block; }
+.logo-text span:nth-child(odd)  { transform: translateY(-2px) rotate(-3deg); }
+.logo-text span:nth-child(even) { transform: translateY(2px) rotate(3deg); }
 .toggle-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; min-height: 30px; }
 /* recessed tray the tiles sit in */
 .board-wrap {
@@ -269,13 +282,12 @@ details.words-made .pts { opacity: 0.8; }
 <body>
 <div class="top-bar">
   <button class="sound-btn" id="soundBtn" aria-label="Sound on">&#x1F50A;</button>
-  <h1 class="logo"><img src="art/logo-banner.jpg" alt="Kablamagram" width="660" height="238"></h1>
+  <h1 class="logo" aria-label="Kablamagram"><span class="logo-text" aria-hidden="true"><span>K</span><span>A</span><span>B</span><span>L</span><span>A</span><span>M</span><span>A</span><span>G</span><span>R</span><span>A</span><span>M</span></span></h1>
   <button class="help-btn" id="helpBtn" aria-label="How to play">?</button>
 </div>
 <div class="mode-row" id="modeRow">
-  <button data-mode="endless">Endless</button>
-  <button data-mode="moves">10 moves</button>
-  <button data-mode="timed">2 minutes</button>
+  <button data-mode="daily">Daily</button>
+  <button data-mode="practice">Play more</button>
 </div>
 <div class="toggle-row">
   <label class="swap-toggle"><input type="checkbox" id="swapToggle"> Swipe to swap tiles</label>
@@ -284,17 +296,19 @@ details.words-made .pts { opacity: 0.8; }
 <div class="score-row">
   <div class="stat"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span></div>
   <div class="stat"><span class="stat-label" id="progressLabel">Moves</span><span class="stat-value" id="progress">0</span></div>
-  <div class="stat"><span class="stat-label">High</span><span class="stat-value" id="high">0</span></div>
+  <div class="stat"><span class="stat-label" id="highLabel">High</span><span class="stat-value" id="high">0</span></div>
 </div>
 <div class="current-word" id="currentWord"></div>
 <div class="feedback" id="feedback"></div>
 <div class="board-wrap">
   <div class="board" id="board"></div>
   <div class="game-over" id="gameOver">
-    <h2>Game over</h2>
+    <h2 id="overTitle">Game over</h2>
     <div class="final" id="finalScore">0</div>
     <div id="highLine"></div>
     <div class="detail" id="bestLine"></div>
+    <div class="new-high" id="streakLine"></div>
+    <div class="detail" id="nextLine"></div>
     <div class="over-buttons">
       <button class="btn-blue" id="shareBtn">Share</button>
       <button class="primary" id="againBtn">Play again</button>
@@ -372,13 +386,13 @@ details.words-made .pts { opacity: 0.8; }
     <p>Longer words score far more: a word is worth its <b>length &times; length</b>. 3 letters = 9 points, 5 = 25, 8 = 64. Each word only counts once per game. Used tiles explode and new letters fall in from the top.</p>
 
     <h3>Swap tiles</h3>
-    <p><b>Swipe</b> a tile onto any neighbour to swap them. A swap never scores by itself, but it can set up a much longer word. You can even swap while spelling. (Turn swapping off with the switch under the modes.)</p>
+    <p><b>Swipe</b> a tile onto any neighbour to swap them. A swap never scores by itself, but it can set up a much longer word. You can even swap while spelling.</p>
 
-    <h3>Modes</h3>
+    <h3>10 moves</h3>
+    <p>Every word and every swap uses a move, and your last move must be a word. You also get 2 free shuffles.</p>
     <ul>
-      <li><b>10 moves</b>: every word and every swap uses a move. Your last move must be a word. You get 2 free shuffles.</li>
-      <li><b>2 minutes</b>: the clock starts on your first tap and pauses while tiles explode.</li>
-      <li><b>Endless</b>: no limit, just play.</li>
+      <li><b>Daily puzzle</b>: everyone gets the same board each day, so you can compare scores with friends. One try per day, and your progress is saved if you leave. A new puzzle arrives at midnight; play on consecutive days to build a streak.</li>
+      <li><b>Play more</b>: as many games as you like on random boards. (Here you can switch swapping off.)</li>
     </ul>
 
     <h3>Power tiles</h3>
@@ -416,14 +430,38 @@ for (const w of EXTRA_WORDS.split(' ')) WORDS.add(w);
 
 // A move is a submitted word or a swap. Shuffles are limited in 10-move games so players can't
 // keep re-rolling the board for free.
+// Two ways to play, both 10 moves with 2 shuffles: the daily puzzle (the same board for everyone
+// that day, one attempt, progress saved) and Play more (unlimited random boards).
 const MODES = {
-  endless: {label: 'Endless'},
-  moves:   {label: '10 moves', moveLimit: 10, shuffles: 2},
-  timed:   {label: '2 minutes', seconds: 120},
+  daily:    {label: 'Daily', moveLimit: 10, shuffles: 2},
+  practice: {label: 'Play more', moveLimit: 10, shuffles: 2},
 };
 
+// Daily puzzle number: days since launch by the player's own calendar date (#1 = 18 Oct 2026), so a
+// new puzzle arrives at each player's local midnight, like Wordle. No server needed: the board and
+// every refill letter come from a random-number generator seeded by the puzzle number.
+const DAILY_EPOCH = Date.UTC(2026, 9, 18);
+function dailyNumber(d = new Date()) {
+  return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DAILY_EPOCH) / 864e5) + 1;
+}
+let seeded = false, rngState = 0;
+function rng() { // mulberry32 while a daily is being played; ordinary randomness otherwise
+  if (!seeded) return Math.random();
+  rngState = (rngState + 0x6D2B79F5) | 0;
+  let t = rngState;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function seedFor(n) { // FNV-1a hash of the puzzle number
+  let h = 2166136261;
+  for (const ch of 'kablamagram-daily-' + n) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h | 0;
+}
+
 // Records live in this browser only:
-// {mode, swaps, highScores: {endless, moves, timed, 'moves:noswap', ...}, longestWord: {word, date}}
+// {mode, swaps, highScores: {daily, moves, 'moves:noswap'}, longestWord: {word, date},
+//  daily: today's puzzle in progress or finished, streak: {count, lastN}}
 const STORE_KEY = 'wordcrush.v1';
 function loadStore() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
@@ -445,14 +483,17 @@ let grid = [], score = 0, moves = 0, busy = false, over = false;
 let path = [];      // [[r, c], ...] tiles the player has tapped, in order
 let wordsMade = []; // {word, pts}
 let moveLog = [];   // for the share message: {len, bomb} per word, 'swap' per swap
-let mode = MODES[store.mode] ? store.mode : 'moves';
-let swapsOn = store.swaps !== false;
+let mode = store.mode === 'practice' ? 'practice' : 'daily';
+let swapsOn = store.swaps !== false; // the switch only applies to Play more
+let dailyNum = dailyNumber();
 let startHigh = 0;  // high score when this game began, to spot a new record at the end
-let timeLeft = 0, clockStarted = false;
 let shufflesLeft = Infinity;
 
+// The daily always allows swapping, so everyone plays by the same rules
+function swapsEnabled() { return mode === 'daily' || swapsOn; }
 // Games with and without swapping aren't comparable, so they keep separate high scores
-function scoreKey() { return swapsOn ? mode : mode + ':noswap'; }
+// ('moves' is Play more's key, kept from when it was the 10-move mode, so old records carry over)
+function scoreKey() { return mode === 'daily' ? 'daily' : swapsOn ? 'moves' : 'moves:noswap'; }
 
 const boardEl = document.getElementById('board');
 const currentWordEl = document.getElementById('currentWord');
@@ -525,44 +566,113 @@ const Sound = (() => {
   };
 })();
 
-function newGame() {
+function resetGame() {
   score = 0; moves = 0; path = []; busy = false; over = false;
   wordsMade = []; moveLog = [];
-  shufflesLeft = MODES[mode].shuffles ?? Infinity;
+  shufflesLeft = MODES[mode].shuffles;
   startHigh = store.highScores[scoreKey()] || 0;
-  timeLeft = (MODES[mode].seconds || 0) * 1000;
-  clockStarted = false;
+  bannerEl.textContent = '';
+  document.getElementById('gameOver').classList.remove('show');
+}
+
+// Mode tabs, the swap switch (Play more only) and New Game (Play more only: the daily has one attempt)
+function refreshModeUi() {
+  const done = store.daily && store.daily.n === dailyNumber() && store.daily.over;
+  document.querySelector('#modeRow [data-mode="daily"]').textContent = 'Daily #' + dailyNumber() + (done ? ' ✓' : '');
+  document.querySelectorAll('#modeRow button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.getElementById('swapToggle').checked = swapsOn;
+  document.querySelector('.swap-toggle').style.display = mode === 'daily' ? 'none' : '';
+  document.getElementById('newBtn').style.display = mode === 'daily' ? 'none' : '';
+  document.getElementById('againBtn').textContent = mode === 'daily' ? 'Play more' : 'Play again';
+}
+
+function newGame() {
+  resetGame();
+  if (mode === 'daily') { dailyNum = dailyNumber(); seeded = true; rngState = seedFor(dailyNum); }
+  else seeded = false;
   updateWordsPanel();
   grid = randomGrid();
   while (!newWordsOnBoard().length) grid = randomGrid();
-  document.getElementById('gameOver').classList.remove('show');
-  document.querySelectorAll('#modeRow button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  document.getElementById('swapToggle').checked = swapsOn;
-  bannerEl.textContent = MODES[mode].seconds ? 'The clock starts on your first tap' : '';
+  refreshModeUi();
   render();
-  track('game_start', {mode, swaps: swapsOn});
+  saveDaily();
+  track('game_start', {mode, swaps: swapsEnabled(), ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+}
+
+// The daily is saved after every move, so leaving and coming back carries on where you were
+// (and restarting can't be used to get a second try)
+function saveDaily() {
+  if (mode !== 'daily') return;
+  store.daily = {n: dailyNum, grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState, over};
+  saveStore();
+}
+function openDaily() {
+  mode = 'daily'; store.mode = 'daily'; saveStore();
+  const d = store.daily;
+  if (!d || d.n !== dailyNumber()) { newGame(); return; }
+  resetGame();
+  dailyNum = d.n; seeded = true;
+  ({grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState} = d);
+  updateWordsPanel();
+  refreshModeUi();
+  render();
+  if (d.over) { over = true; showResult(false); }
+}
+function switchMode(m) {
+  if (busy || m === mode) return;
+  if (m === 'daily') leaveGame(openDaily); // a Play more game in progress asks first
+  else { mode = 'practice'; store.mode = 'practice'; saveStore(); newGame(); } // the daily is saved, so no need to ask
 }
 
 function endGame() {
   over = true; path = [];
+  if (mode === 'daily') { // daily streak: consecutive days with a finished puzzle
+    const s = store.streak || {count: 0, lastN: 0};
+    if (s.lastN !== dailyNum) { s.count = s.lastN === dailyNum - 1 ? s.count + 1 : 1; s.lastN = dailyNum; }
+    store.streak = s;
+  }
+  saveDaily();
   render();
-  const best = wordsMade.reduce((b, w) => (!b || w.pts > b.pts ? w : b), null);
-  const high = document.getElementById('highLine');
-  document.getElementById('finalScore').textContent = score;
-  if (score > startHigh) { high.textContent = 'New high score!'; high.className = 'new-high'; }
-  else { high.textContent = 'High score: ' + startHigh; high.className = 'detail'; }
+  refreshModeUi();
+  showResult(true);
+  const swaps = moves - wordsMade.length;
+  Sound.end(score > startHigh);
+  track('game_over', {mode, swaps: swapsEnabled(), score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
+    ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+}
+
+// The results card over the board: score, record, best word; for the daily also the streak and when
+// the next puzzle arrives
+function showResult(fresh) {
+  const best = bestWord(), high = document.getElementById('highLine'), daily = mode === 'daily';
   const plural = (n, s) => n + ' ' + s + (n === 1 ? '' : 's');
   const swaps = moves - wordsMade.length;
+  document.getElementById('overTitle').textContent = daily ? 'Daily #' + dailyNum + ' done!' : 'Game over';
+  document.getElementById('finalScore').textContent = score;
+  if (fresh && score > startHigh) { high.textContent = daily ? 'Your best daily score!' : 'New high score!'; high.className = 'new-high'; }
+  else { high.textContent = (daily ? 'Best daily: ' : 'High score: ') + Math.max(startHigh, score); high.className = 'detail'; }
   document.getElementById('bestLine').textContent = best
-    ? plural(wordsMade.length, 'word') + (swapsOn ? ', ' + plural(swaps, 'swap') : '')
+    ? plural(wordsMade.length, 'word') + (swapsEnabled() ? ', ' + plural(swaps, 'swap') : '')
       + ' · best: ' + best.word.toUpperCase() + ' (+' + best.pts + ')'
     : 'No words this time';
+  const streak = store.streak && store.streak.lastN === dailyNum ? store.streak.count : 0;
+  document.getElementById('streakLine').textContent = daily && streak > 1 ? '\u{1F525} ' + streak + '-day streak' : '';
+  updateCountdown();
   document.getElementById('shareNote').textContent = '';
-  prepareShareFile(score > startHigh);
+  prepareShareFile(fresh && score > startHigh);
   document.getElementById('gameOver').classList.add('show');
-  Sound.end(score > startHigh);
-  track('game_over', {mode, swaps: swapsOn, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh});
 }
+
+// "Next puzzle in 5h 12m"; when midnight passes, today's new puzzle opens by itself
+function updateCountdown() {
+  const el = document.getElementById('nextLine');
+  if (mode !== 'daily' || !over) { el.textContent = ''; return; }
+  if (dailyNumber() !== dailyNum) { openDaily(); return; }
+  const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const mins = Math.ceil((next - now) / 60000);
+  el.textContent = 'Next puzzle in ' + (mins >= 60 ? Math.floor(mins / 60) + 'h ' : '') + (mins % 60) + 'm';
+}
+setInterval(updateCountdown, 30000);
 
 const SHARE_URL = 'https://kablamagram.com';
 const bestWord = () => wordsMade.reduce((b, w) => (!b || w.pts > b.pts ? w : b), null);
@@ -572,7 +682,7 @@ function shareText() {
   const best = bestWord();
   const keycap = n => n > 9 ? (n === 10 ? '\u{1F51F}' : '(' + n + ')') : n +'️⃣';
   const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A3}' : ''));
-  return 'Kablamagram \u{1F4A5} ' + MODES[mode].label + (swapsOn ? '' : ' (no swaps)') + '\n'
+  return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle' : 'Kablamagram \u{1F4A5} 10 moves' + (swapsOn ? '' : ' (no swaps)')) + '\n'
     + score + ' points' + (best ? ' · best word ' + best.word.toUpperCase() + ' (+' + best.pts + ')' : '') + '\n'
     + (line.length ? 'My ' + line.length + ' moves: ' + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n' : '')
     + 'Can you beat it? ' + SHARE_URL;
@@ -620,7 +730,7 @@ function makeShareCanvas(newHigh) {
   ctx.fillStyle = 'rgba(40,20,80,0.45)'; ctx.fillText('KABLAMAGRAM', W / 2, 156);
   ctx.fillStyle = lg; ctx.fillText('KABLAMAGRAM', W / 2, 150);
   spacing(3); ctx.font = font(700, 40); ctx.fillStyle = '#e4dcff';
-  ctx.fillText((MODES[mode].label + (swapsOn ? '' : ' · no swaps')).toUpperCase(), W / 2, 222);
+  ctx.fillText(mode === 'daily' ? 'DAILY PUZZLE #' + dailyNum : '10 MOVES' + (swapsOn ? '' : ' · NO SWAPS'), W / 2, 222);
   // score
   spacing(0); ctx.font = font(900, 190); ctx.fillStyle = 'rgba(40,20,80,0.4)'; ctx.fillText(String(score), W / 2, 432);
   ctx.fillStyle = '#fff'; ctx.fillText(String(score), W / 2, 424);
@@ -741,10 +851,6 @@ function recordScore(word) {
   return note;
 }
 
-function formatTime(ms) {
-  const s = Math.ceil(ms / 1000);
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-}
 
 let shownScore = 0;
 function renderStats() {
@@ -753,27 +859,15 @@ function renderStats() {
   scoreEl.textContent = score;
   if (score > shownScore) { scoreEl.classList.remove('bump'); void scoreEl.offsetWidth; scoreEl.classList.add('bump'); }
   shownScore = score;
-  document.getElementById('progressLabel').textContent = m.seconds ? 'Time' : m.moveLimit ? 'Moves' : 'Words';
-  document.getElementById('progress').textContent = m.seconds ? formatTime(timeLeft)
-    : m.moveLimit ? moves + ' / ' + m.moveLimit
-    : wordsMade.length;
+  document.getElementById('progressLabel').textContent = 'Moves';
+  document.getElementById('progress').textContent = moves + ' / ' + m.moveLimit;
+  document.getElementById('highLabel').textContent = mode === 'daily' ? 'Best daily' : 'High';
   document.getElementById('high').textContent = store.highScores[scoreKey()] || 0;
   const lw = store.longestWord;
   document.getElementById('records').textContent = lw
     ? 'Longest word ever: ' + lw.word.toUpperCase() + ' (' + lw.word.length + ' letters, ' + new Date(lw.date).toLocaleDateString() + ')'
     : 'Longest word ever: none yet';
 }
-
-// The 2-minute clock pauses while tiles are exploding, so the animation never costs you time
-let lastTick = performance.now();
-setInterval(() => {
-  const now = performance.now(), dt = now - lastTick;
-  lastTick = now;
-  if (!MODES[mode].seconds || !clockStarted || over || busy || helpOpen()) return;
-  timeLeft = Math.max(0, timeLeft - dt);
-  renderStats();
-  if (timeLeft === 0) endGame();
-}, 200);
 
 function updateWordsPanel() {
   const sum = document.querySelector('#wordsMade summary');
@@ -785,7 +879,7 @@ function updateWordsPanel() {
 }
 
 function randLetter() {
-  const idx = Math.floor(Math.random() * LETTER_POOL.length);
+  const idx = Math.floor(rng() * LETTER_POOL.length); // seeded in the daily, so everyone gets the same letters
   return LETTER_POOL[idx];
 }
 
@@ -835,7 +929,6 @@ function render({clearing, drops, slides} = {}) {
 
 function tapTile(r, c) {
   if (busy || over) return;
-  clockStarted = true;
   const i = pathIndex(r, c);
   if (i >= 0) {
     path.length = i; // tapping a picked tile takes it (and every letter after it) back off
@@ -854,13 +947,12 @@ function tapTile(r, c) {
 // Swapping costs a move but never scores by itself. Any word in progress keeps its
 // tiles, so you can swap a better letter into a word you're spelling.
 async function swapTiles(r1, c1, r2, c2) {
-  if (busy || over || !swapsOn) return;
+  if (busy || over || !swapsEnabled()) return;
   if (r2 < 0 || r2 >= ROWS || c2 < 0 || c2 >= COLS) return;
   const a = grid[r1][c1], b = grid[r2][c2];
   if (a.l === b.l && a.p === b.p) return; // identical tiles: nothing would change
   const limit = MODES[mode].moveLimit;
   if (limit && moves === limit - 1) { feedback('Last move: spell a word!', 'bad'); return; }
-  clockStarted = true;
   [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
   moves++;
   moveLog.push('swap');
@@ -871,6 +963,7 @@ async function swapTiles(r1, c1, r2, c2) {
   await sleep(reduceMotion ? 0 : 220);
   busy = false;
   render();
+  saveDaily();
 }
 
 // Board gestures: a tap spells, a swipe of about half a tile swaps toward the swipe (8 directions)
@@ -882,7 +975,7 @@ boardEl.addEventListener('pointerdown', e => {
   boardEl.setPointerCapture(e.pointerId);
 });
 boardEl.addEventListener('pointermove', e => {
-  if (!gesture || gesture.swiped || !swapsOn) return;
+  if (!gesture || gesture.swiped || !swapsEnabled()) return;
   const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
   const tileSize = boardEl.firstElementChild.getBoundingClientRect().width;
   if (Math.hypot(dx, dy) < tileSize * 0.45) return;
@@ -948,7 +1041,7 @@ async function submitWord() {
   if (typed.length < 3) { feedback('Words need at least 3 letters', 'bad'); return; }
   let {word, dupe} = resolveWord(typed);
   if (!word && !dupe && !typed.includes('?') && typed.length >= 4 && navigator.onLine) {
-    busy = true; render(); // the 2-minute clock waits while busy, so the lookup costs no time
+    busy = true; render();
     feedback('Checking ' + typed.toUpperCase() + '…');
     const found = await checkOnline(typed);
     busy = false;
@@ -1015,6 +1108,7 @@ async function submitWord() {
   render();
   const limit = MODES[mode].moveLimit;
   if (limit && moves >= limit) endGame();
+  else saveDaily();
 }
 
 // Boggle matching: all 8 directions, no cell reuse, prefix-pruned DFS
@@ -1118,7 +1212,7 @@ function shuffleUntilPlayable() {
   for (let attempt = 0; attempt < 50; attempt++) {
     const flat = grid.flat();
     for (let i = flat.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rng() * (i + 1));
       [flat[i], flat[j]] = [flat[j], flat[i]];
     }
     grid = Array.from({length: ROWS}, (_, r) => flat.slice(r * COLS, (r + 1) * COLS));
@@ -1140,8 +1234,9 @@ document.getElementById('shuffleBtn').onclick = () => {
   path = []; bannerEl.textContent = '';
   Sound.shuffle();
   render();
+  saveDaily();
 };
-document.getElementById('againBtn').onclick = newGame;
+document.getElementById('againBtn').onclick = () => (mode === 'daily' ? switchMode('practice') : newGame());
 document.getElementById('shareBtn').onclick = shareResult;
 document.getElementById('fbShareBtn').onclick = shareToFacebook;
 document.getElementById('saveImgBtn').onclick = saveResultImage;
@@ -1206,14 +1301,7 @@ document.getElementById('confirmNo').onclick = closeHelp;
 confirmBox.onclick = e => { if (e.target === confirmBox) closeHelp(); };
 
 document.getElementById('newBtn').onclick = () => leaveGame(newGame);
-document.querySelectorAll('#modeRow button').forEach(b => b.onclick = () => {
-  if (b.dataset.mode === mode) return;
-  leaveGame(() => {
-    mode = b.dataset.mode;
-    store.mode = mode; saveStore();
-    newGame();
-  });
-});
+document.querySelectorAll('#modeRow button').forEach(b => b.onclick = () => switchMode(b.dataset.mode));
 document.getElementById('swapToggle').onchange = e => {
   const want = e.target.checked;
   e.target.checked = swapsOn; // stays as it was unless they confirm
@@ -1224,7 +1312,7 @@ document.getElementById('swapToggle').onchange = e => {
   });
 };
 
-// How to play: opens by itself on a player's first visit; the 2-minute clock waits while it's open
+// How to play: opens by itself on a player's first visit
 const helpEl = document.getElementById('help');
 function helpOpen() { return !!document.querySelector('.help.show'); } // either popup (how to play / install)
 function closeHelp() {
@@ -1277,7 +1365,10 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') clearWord();
 });
 
-newGame();
+// Start on today's daily (carrying on if it's in progress), or Play more if that's where they left off
+if (mode === 'daily') openDaily(); else newGame();
+// coming back to the app after midnight: if today's daily was finished, open the new one
+document.addEventListener('visibilitychange', () => { if (!document.hidden) updateCountdown(); });
 </script>
 </body>
 </html>
