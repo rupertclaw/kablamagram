@@ -91,36 +91,60 @@ h1.logo {
 .toggle-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; min-height: 30px; }
 /* recessed tray the tiles sit in */
 .board-wrap {
-  position: relative; border-radius: 18px; padding: 10px 10px 14px; margin-top: 8px; flex: 0 0 auto; max-width: 340px; width: 100%;
-  background: linear-gradient(180deg, rgba(20,10,50,0.35), rgba(20,10,50,0.2));
-  border: 1px solid rgba(255,255,255,0.18);
-  box-shadow: inset 0 3px 10px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.15);
+  position: relative; border-radius: 20px; padding: 13px 13px 17px; margin-top: 8px; flex: 0 0 auto; max-width: 340px; width: 100%;
+  background: linear-gradient(180deg, rgba(18,8,48,0.6), rgba(18,8,48,0.42));
+  border: 2px solid rgba(255,255,255,0.22);
+  box-shadow: inset 0 4px 12px rgba(0,0,0,0.45), 0 2px 0 rgba(255,255,255,0.12), 0 6px 16px rgba(20,8,50,0.35);
 }
-.mode-row { display: flex; gap: 4px; margin-top: 6px; background: rgba(255,255,255,0.12); border-radius: 10px; padding: 3px; }
+.mode-bar { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
+.mode-row { display: flex; gap: 4px; background: rgba(255,255,255,0.12); border-radius: 10px; padding: 3px; }
 .mode-row button { margin: 0; padding: 6px 12px; font-size: 0.8rem; background: transparent; box-shadow: none; text-shadow: none; }
 .mode-row button.active { background: white; color: #764ba2; font-weight: bold; box-shadow: 0 2px 0 rgba(30,15,70,0.35); }
-.records { font-size: 0.75rem; opacity: 0.85; margin-top: 6px; text-align: center; }
 .game-over {
-  position: absolute; inset: 0; border-radius: 16px; background: rgba(30,20,60,0.9); display: none;
-  flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 16px;
+  position: absolute; inset: 0; border-radius: 16px; background: rgba(30,20,60,0.92); display: none;
+  flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 14px 12px;
+  overflow-y: auto; /* small phones: the card scrolls inside the board, the page never does */
 }
+.game-over > :first-child { margin-top: auto; } /* centred when it fits, top-aligned when it scrolls */
+.game-over > :last-child { margin-bottom: auto; }
 .game-over.show { display: flex; }
+/* first-visit quick tips: the page is dimmed except a highlighted area, with a small card beside it */
+.coach { position: fixed; inset: 0; z-index: 45; display: none; }
+.coach.show { display: block; }
+.coach-hole {
+  position: absolute; border-radius: 16px; pointer-events: none; transition: all 0.25s ease;
+  box-shadow: 0 0 0 4px #ffe27a, 0 0 0 9999px rgba(10, 5, 30, 0.66);
+}
+.coach-card {
+  position: absolute; left: 12px; right: 12px; max-width: 360px; margin: 0 auto; padding: 12px 16px 10px;
+  border-radius: 14px; background: #2f1f66; border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; font-size: 0.98rem; line-height: 1.4;
+}
+.coach-step { font-size: 0.68rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.7; margin-bottom: 4px; }
+.coach-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.coach-row button { margin: 4px 0 6px; }
+button.coach-skip { background: none; box-shadow: none; text-shadow: none; padding: 8px 4px; font-weight: 600; opacity: 0.75; }
+.over-words { font-size: 0.78rem; line-height: 1.5; opacity: 0.9; margin-top: 4px; }
+.over-words b { color: #ffe27a; font-weight: 700; }
 .game-over h2 { font-size: 1.3rem; }
 .game-over .final { font-size: 2.4rem; font-weight: bold; }
 .game-over .new-high { color: #f1c40f; font-weight: bold; }
 .game-over .detail { font-size: 0.85rem; opacity: 0.85; }
 .board {
   --gap: 7px;
-  display: grid; grid-template-columns: repeat(var(--cols), 1fr); gap: var(--gap); width: 100%;
+  /* minmax(0, 1fr): columns may shrink below their letter's width, so tiles always fit the tray */
+  display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: var(--gap); width: 100%;
   touch-action: none; /* swipes swap tiles instead of scrolling the page */
+  container-type: inline-size; /* lets tile letters size themselves to the board (cqi units) */
 }
 /* 3-D candy tiles: gradient face, glossy top half, bevelled rim, thick darker edge underneath.
    Each state just swaps the three colours. */
 .tile {
   --top: #ff7466; --bot: #e0382a; --edge: #a3241a;
   position: relative; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-  aspect-ratio: 1; cursor: pointer; user-select: none;
+  aspect-ratio: 1; min-width: 0; min-height: 0; cursor: pointer; user-select: none;
   font-weight: 800; font-size: clamp(18px, 6vw, 28px); color: white;
+  font-size: clamp(13px, 9cqi, 28px); /* scales with the board, not the screen (older browsers keep the line above) */
   text-shadow: 0 2px 0 rgba(0,0,0,0.28), 0 0 6px rgba(0,0,0,0.15);
   background: linear-gradient(180deg, var(--top) 0%, var(--bot) 100%);
   box-shadow:
@@ -193,10 +217,10 @@ h1.logo {
 @keyframes stat-bump { 40% { transform: scale(1.3); color: #ffe27a; } }
 .current-word { min-height: 30px; line-height: 30px; font-weight: bold; margin-top: 4px; font-size: 1.5rem; letter-spacing: 3px; }
 .current-word.empty { font-size: 0.9rem; font-weight: normal; letter-spacing: 0; opacity: 0.6; }
+.current-word.note { color: #ffe27a; font-weight: 700; opacity: 1; line-height: 1.2; display: flex; align-items: center; justify-content: center; text-align: center; }
 .feedback { min-height: 18px; font-size: 0.85rem; margin-top: 0; opacity: 0.9; }
 .feedback.good { color: #2ecc71; }
 .feedback.bad { color: #ff6b6b; }
-.message-banner { min-height: 18px; font-size: 0.75rem; opacity: 0.7; margin-top: 4px; text-align: center; }
 /* 3-D candy buttons, same recipe as the tiles: each colour class just sets --top/--bot/--edge */
 button {
   --top: rgba(255,255,255,0.34); --bot: rgba(255,255,255,0.16); --edge: rgba(30,15,70,0.5);
@@ -220,7 +244,6 @@ button.primary { --top: #6ee59a; --bot: #27ae60; --edge: #1a7a42; padding: 11px 
 button:disabled { opacity: 0.4; cursor: default; }
 .word-row { margin-top: 8px; }
 .reset-row { margin-top: 0; }
-.powers-key { font-size: 0.72rem; opacity: 0.85; margin-top: 4px; text-align: center; }
 /* How to play */
 button.help-btn {
   --top: #ffe27a; --bot: #ffb300; --edge: #b37400; color: #5a3b00; text-shadow: none;
@@ -271,12 +294,24 @@ button.install-btn.show { display: block; }
 .help-power { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
 .help-power .tile { width: 46px; flex: none; font-size: 20px; cursor: default; }
 .help-card .primary { display: block; margin: 14px auto 4px; }
-.dict-mode { font-size: 0.7rem; opacity: 0.6; margin-top: 8px; text-align: center; }
-details.words-made { margin-top: 8px; background: rgba(255,255,255,0.12); border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; max-width: 340px; width: 100%; }
-details.words-made summary { cursor: pointer; font-weight: bold; list-style-position: inside; }
-details.words-made .word-entry { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }
-details.words-made .word-entry:last-child { border-bottom: none; }
-details.words-made .pts { opacity: 0.8; }
+/* short screens (small phones, or a browser's address bar eating the height): tighten everything
+   around the board so the board itself can stay a playable size */
+@media (max-height: 720px) {
+  h1.logo { height: 58px; }
+  .logo-text { font-size: clamp(30px, 9vw, 40px); }
+  button.sound-btn, button.help-btn { width: 36px; height: 36px; }
+  .mode-row button { padding: 5px 10px; }
+  .toggle-row { min-height: 24px; margin-top: 2px; }
+  .score-row { margin-top: 5px; }
+  .stat { padding: 3px 6px 4px; }
+  .stat-value { font-size: 1.15rem; }
+  .current-word { min-height: 26px; line-height: 26px; margin-top: 2px; font-size: 1.3rem; }
+  .feedback { min-height: 16px; font-size: 0.8rem; }
+  .board-wrap { margin-top: 4px; padding: 11px 11px 15px; }
+  .word-row { margin-top: 4px; }
+  .word-row button, .reset-row button { padding: 8px 14px; margin: 3px 3px 6px; font-size: 0.95rem; }
+  .word-row button.primary { padding: 8px 22px; }
+}
 </style>
 </head>
 <body>
@@ -285,13 +320,15 @@ details.words-made .pts { opacity: 0.8; }
   <h1 class="logo" aria-label="Kablamagram"><span class="logo-text" aria-hidden="true"><span>K</span><span>A</span><span>B</span><span>L</span><span>A</span><span>M</span><span>A</span><span>G</span><span>R</span><span>A</span><span>M</span></span></h1>
   <button class="help-btn" id="helpBtn" aria-label="How to play">?</button>
 </div>
-<div class="mode-row" id="modeRow">
-  <button data-mode="daily">Daily</button>
-  <button data-mode="practice">Play more</button>
+<div class="mode-bar">
+  <div class="mode-row" id="modeRow">
+    <button data-mode="daily">Daily</button>
+    <button data-mode="practice">Play more</button>
+  </div>
+  <button class="install-btn" id="installBtn">&#x2B07; Install</button>
 </div>
 <div class="toggle-row">
   <label class="swap-toggle"><input type="checkbox" id="swapToggle"> Swipe to swap tiles</label>
-  <button class="install-btn" id="installBtn">&#x2B07; Install app</button>
 </div>
 <div class="score-row">
   <div class="stat"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span></div>
@@ -319,6 +356,8 @@ details.words-made .pts { opacity: 0.8; }
       &middot; <a id="copyTextBtn" href="#">Copy text</a>
     </div>
     <div class="detail" id="shareNote"></div>
+    <div class="over-words" id="wordsLine"></div>
+    <div class="detail" id="records"></div>
   </div>
 </div>
 <div class="word-row">
@@ -330,10 +369,6 @@ details.words-made .pts { opacity: 0.8; }
   <button id="newBtn" class="btn-orange">New Game</button>
   <button id="shuffleBtn" class="btn-teal">Shuffle</button>
 </div>
-<div class="powers-key">Long words leave power tiles: 6 letters &rarr; <b>?</b> wildcard &middot; 7 &rarr; <b>&times;2</b> score &middot; 8+ &rarr; &#x1F4A3; bomb</div>
-<div class="records" id="records"></div>
-<details class="words-made" id="wordsMade"><summary>Words made (0)</summary><div id="wordsList"><div class="word-entry"><span>None yet</span><span class="pts"></span></div></div></details>
-<div class="message-banner" id="banner"></div>
 <div class="consent" id="consentPrompt" role="dialog" aria-label="Analytics consent">
   Your scores are saved on this device. Can we count your visit to help improve the game?
   Anonymous stats, no ads, nothing sold. <a href="privacy.html">Privacy</a>
@@ -343,6 +378,17 @@ details.words-made .pts { opacity: 0.8; }
   Your scores are saved on this device and stay until you clear your browser data.
   We collect anonymous usage stats to improve the game. <a href="privacy.html">Privacy</a>
   <div><button class="primary" id="noticeOk">Got it</button></div>
+</div>
+<div class="coach" id="coach" role="dialog" aria-modal="true" aria-labelledby="coachText">
+  <div class="coach-hole" id="coachHole"></div>
+  <div class="coach-card" id="coachCard">
+    <div class="coach-step" id="coachStep"></div>
+    <p id="coachText"></p>
+    <div class="coach-row">
+      <button class="coach-skip" id="coachSkip">Skip</button>
+      <button class="primary" id="coachNext">Got it</button>
+    </div>
+  </div>
 </div>
 <div class="help" id="confirmBox">
   <div class="help-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMsg" style="text-align:center">
@@ -380,7 +426,7 @@ details.words-made .pts { opacity: 0.8; }
 
     <h3>Spell words</h3>
     <p>Tap letters that <b>touch</b> (sideways, up, down or diagonally) to spell a word of <b>3 or more letters</b>. Each tile can only be used once per word. Then press <b>Submit</b>.</p>
-    <p>Made a mistake? Tap a picked tile to go back to it, or use <b>Undo</b> and <b>Clear</b>.</p>
+    <p>Made a mistake? Tap a picked tile to go back to it, or use <b>Clear</b>. <b>Undo</b> takes off your last letter, or, if you're not spelling, takes back your last swap and gives the move back.</p>
 
     <h3>Score</h3>
     <p>Longer words score far more: a word is worth its <b>length &times; length</b>. 3 letters = 9 points, 5 = 25, 8 = 64. Each word only counts once per game. Used tiles explode and new letters fall in from the top.</p>
@@ -404,11 +450,13 @@ details.words-made .pts { opacity: 0.8; }
     <h3>Records</h3>
     <p>Your high score for each mode and your longest word ever are saved on this device.</p>
 
+    <h3>Dictionary</h3>
+    <p>172,000+ words built in, so it works offline, plus Wiktionary for newer words when you're online.</p>
+
     <button class="primary" id="helpClose">Let's play!</button>
-    <p style="text-align:center; font-size:0.8rem; margin-top:6px"><a href="privacy.html" style="color:#ffe27a">Privacy</a></p>
+    <p style="text-align:center; font-size:0.85rem; margin-top:6px"><a href="#" id="replayTips" style="color:#ffe27a">Replay the quick tips</a> &middot; <a href="privacy.html" style="color:#ffe27a">Privacy</a></p>
   </div>
 </div>
-<div class="dict-mode" id="dictMode">Dictionary: 172,000+ words built in (works offline), plus Wiktionary when online</div>
 
 <script>
 const COLS = 5, ROWS = 6;
@@ -488,6 +536,7 @@ let swapsOn = store.swaps !== false; // the switch only applies to Play more
 let dailyNum = dailyNumber();
 let startHigh = 0;  // high score when this game began, to spot a new record at the end
 let shufflesLeft = Infinity;
+let lastSwap = null; // [r1, c1, r2, c2] of the swap Undo can take back
 
 // The daily always allows swapping, so everyone plays by the same rules
 function swapsEnabled() { return mode === 'daily' || swapsOn; }
@@ -498,7 +547,16 @@ function scoreKey() { return mode === 'daily' ? 'daily' : swapsOn ? 'moves' : 'm
 const boardEl = document.getElementById('board');
 const currentWordEl = document.getElementById('currentWord');
 const feedbackEl = document.getElementById('feedback');
-const bannerEl = document.getElementById('banner');
+// Short messages ("TRAINERS earned a bomb!") show in the word line while no word is being spelled,
+// so the page needs no extra line for them
+let bannerText = '';
+const bannerEl = { get textContent() { return bannerText; }, set textContent(v) { bannerText = v; showWordLine(); } };
+function showWordLine() {
+  const w = currentWord();
+  currentWordEl.textContent = w || bannerText || 'Tap letters to spell a word';
+  currentWordEl.classList.toggle('empty', !w);
+  currentWordEl.classList.toggle('note', !w && !!bannerText);
+}
 const submitBtn = document.getElementById('submitBtn');
 
 // A tile is {l: letter, p: power}. Power is null, 'wild' (letter '?', stands for any letter),
@@ -568,7 +626,7 @@ const Sound = (() => {
 
 function resetGame() {
   score = 0; moves = 0; path = []; busy = false; over = false;
-  wordsMade = []; moveLog = [];
+  wordsMade = []; moveLog = []; lastSwap = null;
   shufflesLeft = MODES[mode].shuffles;
   startHigh = store.highScores[scoreKey()] || 0;
   bannerEl.textContent = '';
@@ -584,6 +642,13 @@ function refreshModeUi() {
   document.querySelector('.swap-toggle').style.display = mode === 'daily' ? 'none' : '';
   document.getElementById('newBtn').style.display = mode === 'daily' ? 'none' : '';
   document.getElementById('againBtn').textContent = mode === 'daily' ? 'Play more' : 'Play again';
+  updateToggleRow();
+}
+// The swap switch's row (Play more only) takes no space in the daily
+function updateToggleRow() {
+  const swapShown = document.querySelector('.swap-toggle').style.display !== 'none';
+  document.querySelector('.toggle-row').style.display = swapShown ? '' : 'none';
+  fitToScreen();
 }
 
 function newGame() {
@@ -603,7 +668,7 @@ function newGame() {
 // (and restarting can't be used to get a second try)
 function saveDaily() {
   if (mode !== 'daily') return;
-  store.daily = {n: dailyNum, grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState, over};
+  store.daily = {n: dailyNum, grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState, over, lastSwap};
   saveStore();
 }
 function openDaily() {
@@ -613,6 +678,7 @@ function openDaily() {
   resetGame();
   dailyNum = d.n; seeded = true;
   ({grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState} = d);
+  lastSwap = d.lastSwap || null;
   updateWordsPanel();
   refreshModeUi();
   render();
@@ -869,14 +935,23 @@ function renderStats() {
     : 'Longest word ever: none yet';
 }
 
+// The words made this game, listed on the results card
 function updateWordsPanel() {
-  const sum = document.querySelector('#wordsMade summary');
-  const list = document.getElementById('wordsList');
-  sum.textContent = 'Words made (' + wordsMade.length + ')';
-  list.innerHTML = wordsMade.length
-    ? wordsMade.map(w => '<div class="word-entry"><span>' + w.word.toUpperCase() + '</span><span class="pts">+' + w.pts + '</span></div>').join('')
-    : '<div class="word-entry"><span>None yet</span><span class="pts"></span></div>';
+  document.getElementById('wordsLine').innerHTML = wordsMade.length
+    ? wordsMade.map(w => w.word.toUpperCase() + ' <b>+' + w.pts + '</b>').join(' &middot; ')
+    : '';
 }
+
+// Fit the whole game on one screen: if anything would need scrolling, shrink the board just enough
+// (it's the only part that can shrink; its height follows its width)
+function fitToScreen() {
+  const wrap = document.querySelector('.board-wrap');
+  wrap.style.maxWidth = '';
+  const overflow = document.documentElement.scrollHeight - window.innerHeight;
+  if (overflow > 0) wrap.style.maxWidth = Math.max(200, wrap.offsetWidth - Math.ceil(overflow * 5 / 6) - 2) + 'px';
+}
+window.addEventListener('resize', fitToScreen);
+document.fonts && document.fonts.ready.then(fitToScreen);
 
 function randLetter() {
   const idx = Math.floor(rng() * LETTER_POOL.length); // seeded in the daily, so everyone gets the same letters
@@ -918,9 +993,9 @@ function render({clearing, drops, slides} = {}) {
       boardEl.appendChild(d);
     }
   }
-  currentWordEl.textContent = currentWord() || 'Tap letters to spell a word';
-  currentWordEl.classList.toggle('empty', !path.length);
+  showWordLine();
   submitBtn.disabled = busy || over || path.length < 3;
+  document.getElementById('undoBtn').disabled = busy || over || (!path.length && !lastSwap);
   const shuffleBtn = document.getElementById('shuffleBtn');
   shuffleBtn.textContent = shufflesLeft === Infinity ? 'Shuffle' : 'Shuffle (' + shufflesLeft + ')';
   shuffleBtn.disabled = shufflesLeft <= 0;
@@ -956,6 +1031,7 @@ async function swapTiles(r1, c1, r2, c2) {
   [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
   moves++;
   moveLog.push('swap');
+  lastSwap = [r1, c1, r2, c2]; // Undo can take this back until a word is played or the board is shuffled
   Sound.swap();
   bannerEl.textContent = '';
   busy = true;
@@ -1074,6 +1150,7 @@ async function submitWord() {
   moves++;
   wordsMade.push({word, pts});
   moveLog.push({len: word.length, bomb: blast.length > 0});
+  lastSwap = null; // a played word is final (undoing it would reveal the letters that fall in)
   Sound.good();
   track('word_scored', {mode, length: word.length, points: pts});
   if (earned) track('power_tile', {type: earned});
@@ -1221,7 +1298,27 @@ function shuffleUntilPlayable() {
   do grid = randomGrid(); while (!newWordsOnBoard().length);
 }
 
-function undo() { if (!busy && !over && path.length) { path.pop(); Sound.untap(); render(); } }
+// Undo: mid-word, takes off the last letter; otherwise takes back the last swap and refunds its move.
+// Swaps reveal nothing new, so undoing one is fair; played words are final.
+async function undo() {
+  if (busy || over) return;
+  if (path.length) { path.pop(); Sound.untap(); render(); return; }
+  if (!lastSwap) return;
+  const [r1, c1, r2, c2] = lastSwap;
+  lastSwap = null;
+  [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
+  moves--;
+  moveLog.pop();
+  Sound.swap();
+  busy = true;
+  render({slides: {[r1 + ',' + c1]: [r2 - r1, c2 - c1], [r2 + ',' + c2]: [r1 - r2, c1 - c2]}});
+  await sleep(reduceMotion ? 0 : 220);
+  busy = false;
+  render();
+  saveDaily();
+  feedback('Swap undone, move refunded', 'good');
+  track('swap_undo');
+}
 function clearWord() { if (!busy && !over && path.length) { path = []; Sound.untap(); render(); } }
 
 document.getElementById('undoBtn').onclick = undo;
@@ -1230,6 +1327,7 @@ submitBtn.onclick = submitWord;
 document.getElementById('shuffleBtn').onclick = () => {
   if (busy || over || shufflesLeft <= 0) return;
   shufflesLeft--;
+  lastSwap = null;
   shuffleUntilPlayable();
   path = []; bannerEl.textContent = '';
   Sound.shuffle();
@@ -1267,8 +1365,11 @@ function setConsent(choice) {
   saveStore();
   consentEl.classList.remove('show');
 }
-if (IN_EUROPE && !store.consent && store.analytics !== false) consentEl.classList.add('show');
-else if (!store.seenNotice) noticeEl.classList.add('show');
+// shown once the quick tips are out of the way (see below)
+function showFirstVisitNotice() {
+  if (IN_EUROPE && !store.consent && store.analytics !== false) consentEl.classList.add('show');
+  else if (!store.seenNotice) noticeEl.classList.add('show');
+}
 document.getElementById('consentYes').onclick = () => {
   setConsent('granted');
   gtag('consent', 'update', {analytics_storage: 'granted'});
@@ -1312,7 +1413,7 @@ document.getElementById('swapToggle').onchange = e => {
   });
 };
 
-// How to play: opens by itself on a player's first visit
+// How to play: the full guide behind the ? button (first-time players get the quick tips instead)
 const helpEl = document.getElementById('help');
 function helpOpen() { return !!document.querySelector('.help.show'); } // either popup (how to play / install)
 function closeHelp() {
@@ -1325,7 +1426,41 @@ document.getElementById('helpBtn').onclick = () => {
 };
 document.getElementById('helpClose').onclick = closeHelp;
 helpEl.onclick = e => { if (e.target === helpEl) closeHelp(); }; // tap outside the card
-if (!store.seenHelp) helpEl.classList.add('show');
+
+// Quick tips for first-time players: a few short pop-ups, each highlighting the part they're about
+const TIPS = [
+  {target: '.board-wrap', text: 'Tap a letter, then tap letters touching it, in any direction (even diagonally), to build a word. Then tap <b>Submit</b>.'},
+  {target: '.board-wrap', text: '<b>Swipe</b> a tile onto a neighbour to swap them. A swap uses 1 move, so use it to set up a longer word.'},
+  {target: '.score-row', text: 'You have <b>10 moves</b>: every word or swap is one. Longer words score far more: 4 letters = 16 points, 7 letters = 49!'},
+  {target: '#modeRow', text: 'Everyone gets the same <b>Daily</b> puzzle, one try a day. Tap <b>Play more</b> for unlimited games.'},
+];
+const coachEl = document.getElementById('coach'), coachHole = document.getElementById('coachHole'), coachCard = document.getElementById('coachCard');
+let tipIndex = -1;
+function coachOpen() { return coachEl.classList.contains('show'); }
+function showTip(i) {
+  tipIndex = i;
+  const tip = TIPS[i], r = document.querySelector(tip.target).getBoundingClientRect(), pad = 6;
+  Object.assign(coachHole.style, {left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + 2 * pad + 'px', height: r.height + 2 * pad + 'px'});
+  document.getElementById('coachStep').textContent = 'Tip ' + (i + 1) + ' of ' + TIPS.length;
+  document.getElementById('coachText').innerHTML = tip.text;
+  document.getElementById('coachNext').textContent = i === TIPS.length - 1 ? "Let's play!" : 'Got it';
+  // the card goes below the highlight if it fits, else above, else over its lower edge
+  coachCard.style.top = coachCard.style.bottom = '';
+  const h = coachCard.offsetHeight, gap = 14;
+  if (r.bottom + pad + gap + h < window.innerHeight) coachCard.style.top = r.bottom + pad + gap + 'px';
+  else if (r.top - pad - gap - h > 0) coachCard.style.top = r.top - pad - gap - h + 'px';
+  else coachCard.style.top = Math.max(8, r.bottom - h - 12) + 'px';
+}
+function startTips() { coachEl.classList.add('show'); showTip(0); }
+function endTips(skipped) {
+  coachEl.classList.remove('show');
+  if (!store.seenTips) { store.seenTips = true; store.seenHelp = true; saveStore(); showFirstVisitNotice(); }
+  track(skipped ? 'tips_skipped' : 'tips_done', {tip: tipIndex + 1});
+}
+document.getElementById('coachNext').onclick = () => (tipIndex < TIPS.length - 1 ? showTip(tipIndex + 1) : endTips(false));
+document.getElementById('coachSkip').onclick = () => endTips(true);
+document.getElementById('replayTips').onclick = e => { e.preventDefault(); closeHelp(); startTips(); };
+window.addEventListener('resize', () => { if (coachOpen()) showTip(tipIndex); });
 
 // Install as an app. Android/desktop Chrome hand us a real install prompt (beforeinstallprompt);
 // iPhone never does, so there the button shows Add to Home Screen steps instead.
@@ -1335,7 +1470,7 @@ const isInstalled = () => matchMedia('(display-mode: standalone)').matches || na
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isMobile = isIos || /android/i.test(navigator.userAgent);
 let installPrompt = null;
-function updateInstallBtn() { installBtn.classList.toggle('show', !isInstalled() && (!!installPrompt || isMobile)); }
+function updateInstallBtn() { installBtn.classList.toggle('show', !isInstalled() && (!!installPrompt || isMobile)); updateToggleRow(); }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; updateInstallBtn(); });
 window.addEventListener('appinstalled', () => { installPrompt = null; installBtn.classList.remove('show'); track('app_installed'); });
 if (isInstalled()) track('opened_as_app');
@@ -1359,6 +1494,11 @@ updateInstallBtn();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 document.addEventListener('keydown', e => {
+  if (coachOpen()) {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('coachNext').click(); }
+    else if (e.key === 'Escape') endTips(true);
+    return;
+  }
   if (helpOpen()) { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeHelp(); } return; }
   if (e.key === 'Enter') { e.preventDefault(); submitWord(); }
   else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
@@ -1367,6 +1507,13 @@ document.addEventListener('keydown', e => {
 
 // Start on today's daily (carrying on if it's in progress), or Play more if that's where they left off
 if (mode === 'daily') openDaily(); else newGame();
+fitToScreen();
+// first visit: the quick tips (once the logo font has loaded, so the highlights line up), then the
+// analytics notice; returning players (including anyone who saw the old long guide) skip the tips
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+  fitToScreen();
+  if (!store.seenTips && !store.seenHelp) startTips(); else showFirstVisitNotice();
+});
 // coming back to the app after midnight: if today's daily was finished, open the new one
 document.addEventListener('visibilitychange', () => { if (!document.hidden) updateCountdown(); });
 </script>
