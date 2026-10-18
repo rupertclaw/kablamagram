@@ -660,15 +660,17 @@ function newGame() {
   while (!newWordsOnBoard().length) grid = randomGrid();
   refreshModeUi();
   render();
-  saveDaily();
+  saveGame();
   track('game_start', {mode, swaps: swapsEnabled(), ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
 }
 
-// The daily is saved after every move, so leaving and coming back carries on where you were
-// (and restarting can't be used to get a second try)
-function saveDaily() {
-  if (mode !== 'daily') return;
-  store.daily = {n: dailyNum, grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState, over, lastSwap};
+// Both games are saved after every move (and the moment new letters fall in), so closing the app
+// mid-game and coming back carries on where you were. For the daily it also means restarting
+// can't be used to get a second try.
+function saveGame() {
+  const state = {grid, score, moves, wordsMade, moveLog, shufflesLeft, over, lastSwap};
+  if (mode === 'daily') store.daily = {n: dailyNum, rngState, ...state};
+  else store.practice = state;
   saveStore();
 }
 function openDaily() {
@@ -684,10 +686,22 @@ function openDaily() {
   render();
   if (d.over) { over = true; showResult(false); }
 }
-function switchMode(m) {
+// Play more: carry on with the saved game if it isn't finished, otherwise start a new one
+function openPractice() {
+  mode = 'practice'; store.mode = 'practice'; saveStore();
+  const p = store.practice;
+  if (!p || !p.grid || p.over) { newGame(); return; }
+  resetGame();
+  seeded = false;
+  ({grid, score, moves, wordsMade, moveLog, shufflesLeft} = p);
+  lastSwap = p.lastSwap || null;
+  updateWordsPanel();
+  refreshModeUi();
+  render();
+}
+function switchMode(m) { // both games are saved, so switching never loses anything
   if (busy || m === mode) return;
-  if (m === 'daily') leaveGame(openDaily); // a Play more game in progress asks first
-  else { mode = 'practice'; store.mode = 'practice'; saveStore(); newGame(); } // the daily is saved, so no need to ask
+  if (m === 'daily') openDaily(); else openPractice();
 }
 
 function endGame() {
@@ -697,7 +711,7 @@ function endGame() {
     if (s.lastN !== dailyNum) { s.count = s.lastN === dailyNum - 1 ? s.count + 1 : 1; s.lastN = dailyNum; }
     store.streak = s;
   }
-  saveDaily();
+  saveGame();
   render();
   refreshModeUi();
   showResult(true);
@@ -1039,7 +1053,7 @@ async function swapTiles(r1, c1, r2, c2) {
   await sleep(reduceMotion ? 0 : 220);
   busy = false;
   render();
-  saveDaily();
+  saveGame();
 }
 
 // Board gestures: a tap spells, a swipe of about half a tile swaps toward the swipe (8 directions)
@@ -1172,6 +1186,7 @@ async function submitWord() {
   if (earned) { boardEl.children[lr * COLS + lc].classList.add('spawn'); Sound.power(); await sleep(500); }
   else await sleep(150);
   const drops = cascade();
+  saveGame(); // save as soon as the new letters exist, so closing the app mid-animation can't undo the word
   if (!reduceMotion) {
     render({drops});
     await sleep(fallTime(Math.max(...drops.flat())));
@@ -1185,7 +1200,7 @@ async function submitWord() {
   render();
   const limit = MODES[mode].moveLimit;
   if (limit && moves >= limit) endGame();
-  else saveDaily();
+  else saveGame();
 }
 
 // Boggle matching: all 8 directions, no cell reuse, prefix-pruned DFS
@@ -1315,7 +1330,7 @@ async function undo() {
   await sleep(reduceMotion ? 0 : 220);
   busy = false;
   render();
-  saveDaily();
+  saveGame();
   feedback('Swap undone, move refunded', 'good');
   track('swap_undo');
 }
@@ -1332,7 +1347,7 @@ document.getElementById('shuffleBtn').onclick = () => {
   path = []; bannerEl.textContent = '';
   Sound.shuffle();
   render();
-  saveDaily();
+  saveGame();
 };
 document.getElementById('againBtn').onclick = () => (mode === 'daily' ? switchMode('practice') : newGame());
 document.getElementById('shareBtn').onclick = shareResult;
@@ -1505,8 +1520,10 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'Escape') clearWord();
 });
 
-// Start on today's daily (carrying on if it's in progress), or Play more if that's where they left off
-if (mode === 'daily') openDaily(); else newGame();
+// Start where they left off: today's daily or their Play more game, carrying on if it's in progress
+if (mode === 'daily') openDaily(); else openPractice();
+// safety net when the app goes into the background (not mid-animation, when a word is half-applied)
+document.addEventListener('visibilitychange', () => { if (document.hidden && !busy) saveGame(); });
 fitToScreen();
 // first visit: the quick tips (once the logo font has loaded, so the highlights line up), then the
 // analytics notice; returning players (including anyone who saw the old long guide) skip the tips
