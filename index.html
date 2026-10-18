@@ -236,6 +236,9 @@ button.install-btn {
 button.install-btn.show { display: block; }
 .install-steps { padding-left: 22px; }
 .install-steps li { margin: 8px 0; }
+.share-more { margin-top: 4px; font-size: 0.85rem; opacity: 0.95; }
+.share-more a { color: #ffe27a; font-weight: 700; text-decoration: none; }
+.share-more a:hover { text-decoration: underline; }
 .share-icon { display: inline-block; vertical-align: -3px; width: 18px; height: 18px; }
 .help {
   position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center;
@@ -295,6 +298,11 @@ details.words-made .pts { opacity: 0.8; }
     <div class="over-buttons">
       <button class="btn-blue" id="shareBtn">Share</button>
       <button class="primary" id="againBtn">Play again</button>
+    </div>
+    <div class="share-more">
+      <a id="fbShareBtn" href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fkablamagram.com%2F" target="_blank" rel="noopener">Post on Facebook</a>
+      &middot; <a id="saveImgBtn" href="#" download="kablamagram-result.jpg">Save image</a>
+      &middot; <a id="copyTextBtn" href="#">Copy text</a>
     </div>
     <div class="detail" id="shareNote"></div>
   </div>
@@ -653,7 +661,13 @@ let shareFile = null;
 function prepareShareFile(newHigh) {
   shareFile = null;
   try {
-    makeShareCanvas(newHigh).toBlob(b => { if (b) shareFile = new File([b], 'kablamagram-result.jpg', {type: 'image/jpeg'}); }, 'image/jpeg', 0.92);
+    makeShareCanvas(newHigh).toBlob(b => {
+      if (!b) return;
+      shareFile = new File([b], 'kablamagram-result.jpg', {type: 'image/jpeg'});
+      const save = document.getElementById('saveImgBtn');
+      if (save.href.startsWith('blob:')) URL.revokeObjectURL(save.href);
+      save.href = URL.createObjectURL(shareFile); // a real link, so the download starts on the tap itself
+    }, 'image/jpeg', 0.92);
   } catch (e) { /* no picture: text share still works */ }
 }
 
@@ -686,6 +700,33 @@ async function shareResult() {
     a.onclick = () => track('share', {method: 'download', content_type: 'result'});
     note.append(' · ', a);
   }
+}
+
+// Facebook isn't in the share sheet on computers (and Facebook ignores text a site pre-fills),
+// so this link opens Facebook's own share box for the game's link and copies the result
+// text, ready to paste into the post. The link opens itself, so pop-up blockers leave it alone.
+function shareToFacebook() {
+  const note = document.getElementById('shareNote');
+  note.textContent = '';
+  try {
+    navigator.clipboard.writeText(shareText())
+      .then(() => { note.textContent = 'Your result is copied. Paste it into your Facebook post.'; })
+      .catch(() => {});
+  } catch (e) { /* no clipboard: the post still gets the game's link */ }
+  track('share', {method: 'facebook', content_type: 'result'});
+}
+
+// Save image: the result picture, e.g. to attach to a Facebook post on a computer
+function saveResultImage(e) {
+  if (!shareFile) { e.preventDefault(); return; } // picture still being drawn (a split second after game over)
+  document.getElementById('shareNote').textContent = 'Image saved. Add it to your post.';
+  track('share', {method: 'download', content_type: 'result'});
+}
+async function copyResultText(e) {
+  e.preventDefault();
+  const note = document.getElementById('shareNote');
+  try { await navigator.clipboard.writeText(shareText()); note.textContent = 'Copied! Paste it anywhere.'; track('share', {method: 'clipboard', content_type: 'result'}); }
+  catch (err) { note.textContent = shareText(); }
 }
 
 // High scores are saved as they happen, so an abandoned game still counts
@@ -1102,6 +1143,9 @@ document.getElementById('shuffleBtn').onclick = () => {
 };
 document.getElementById('againBtn').onclick = newGame;
 document.getElementById('shareBtn').onclick = shareResult;
+document.getElementById('fbShareBtn').onclick = shareToFacebook;
+document.getElementById('saveImgBtn').onclick = saveResultImage;
+document.getElementById('copyTextBtn').onclick = copyResultText;
 const soundBtn = document.getElementById('soundBtn');
 function showSoundState() {
   const on = store.sound !== false;
