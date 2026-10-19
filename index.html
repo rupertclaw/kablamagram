@@ -218,6 +218,7 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
 }
 .tile:empty { visibility: hidden; } /* a cleared cell waiting for the fall */
 /* power tiles, earned by long words (picked/cleared colours below still override them) */
+.tile.rare { --top: #d4455a; --bot: #9a1531; --edge: #5c0a1d; } /* Q, X, Z: a darker red, +1 point each */
 .tile.power-wild { --top: #e08bff; --bot: #9b2fe0; --edge: #5f1a96; animation: wild-glow 1.6s ease-in-out infinite; }
 @keyframes wild-glow { 50% { filter: brightness(1.2) saturate(1.2); } }
 .tile.power-x2 { --top: #74c8ff; --bot: #1f78d8; --edge: #0d4a96; }
@@ -276,7 +277,7 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
 .current-word { min-height: 30px; line-height: 30px; font-weight: bold; margin-top: 4px; font-size: 1.5rem; letter-spacing: 3px; }
 .current-word.empty { font-size: 0.9rem; font-weight: normal; letter-spacing: 0; opacity: 0.6; }
 .current-word.note { color: #ffe27a; font-weight: 700; opacity: 1; line-height: 1.2; display: flex; align-items: center; justify-content: center; text-align: center; }
-.feedback { min-height: 18px; font-size: 0.85rem; margin-top: 0; opacity: 0.9; }
+.feedback { min-height: 18px; font-size: 0.85rem; margin-top: 0; opacity: 0.9; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; } /* one line: long messages shrink to fit */
 .feedback.good { color: #2ecc71; }
 .feedback.bad { color: #ff6b6b; }
 /* 3-D candy buttons, same recipe as the tiles: each colour class just sets --top/--bot/--edge */
@@ -493,7 +494,7 @@ button.install-btn.show { display: block; }
     <p>Made a mistake? Tap a picked tile to go back to it, or use <b>Clear</b>. <b>Undo</b> takes off your last letter, or, if you're not spelling, takes back your last swap and gives the move back.</p>
 
     <h3>Score</h3>
-    <p>Longer words score far more: a word is worth its <b>length &times; length</b>. 3 letters = 9 points, 5 = 25, 8 = 64. Each word only counts once per game. Used tiles explode and new letters fall in from the top.</p>
+    <p>Longer words score far more: a word is worth its <b>length &times; length</b>. 3 letters = 9 points, 5 = 25, 8 = 64. The hard letters <b>Q, X and Z</b> (a darker red) count as <b>2 letters</b> each, so QUIZ scores like a 6-letter word: 36 points. Each word only counts once per game. Used tiles explode and new letters fall in from the top.</p>
 
     <h3>Swap tiles</h3>
     <p><b>Swipe</b> a tile onto any neighbour to swap them. A swap never scores by itself, but it can set up a much longer word. You can even swap while spelling.</p>
@@ -649,6 +650,7 @@ function newTile(l, p = null) { return {l, p}; }
 const POWER_FOR_LENGTH = {6: 'wild', 7: 'x2', 8: 'bomb', 9: 'bomb', 10: 'x3'};
 const POWER_NAMES = {wild: 'a ? wildcard: use it as any letter', x2: 'a ×2 tile: use it to double a word', x3: 'a ×3 tile: use it to triple a word', bomb: 'a Kablam tile: use it to blow up its neighbours'};
 const BLAST_PTS = 5; // per tile a bomb blows up
+const RARE_LETTERS = new Set(['Q', 'X', 'Z']), RARE_LETTER_BONUS = 1; // hard-to-use letters: a shade darker, and each counts as one extra letter when scoring
 
 function randomGrid() {
   return Array.from({length: ROWS}, () => Array.from({length: COLS}, () => newTile(randLetter())));
@@ -1128,6 +1130,7 @@ function render({clearing, drops, slides} = {}) {
       const tile = grid[r][c];
       let cls = 'tile';
       if (tile && tile.p) cls += ' power-' + tile.p;
+      else if (tile && RARE_LETTERS.has(tile.l)) cls += ' rare';
       if (pathIndex(r, c) >= 0) cls += clearing ? ' word-cleared' : ' picked';
       if (!clearing && last && last[0] === r && last[1] === c) cls += ' last';
       if (drops && drops[r][c]) {
@@ -1299,7 +1302,9 @@ async function submitWord() {
       if (!blast.some(([br, bc]) => br === r2 && bc === c2)) blast.push([r2, c2]);
     }
   }
-  const pts = word.length * word.length * mult + blast.length * BLAST_PTS;
+  const rare = used.filter(t => RARE_LETTERS.has(t.l)).length; // a wildcard standing in for one doesn't count
+  const size = word.length + rare * RARE_LETTER_BONUS; // each Q, X or Z counts as an extra letter
+  const pts = size * size * mult + blast.length * BLAST_PTS;
   const earned = POWER_FOR_LENGTH[Math.min(word.length, 10)]; // 10 letters or more: x3
   score += pts;
   moves++;
@@ -1310,10 +1315,15 @@ async function submitWord() {
   track('word_scored', {mode, length: word.length, points: pts});
   if (earned) track('power_tile', {type: earned});
   updateWordsPanel();
-  // show the sum when a power tile changed the score, e.g. "DONAIRS +79 (49 + 30 Kablam!)"
-  const sum = mult > 1 || blast.length ? word.length * word.length + (mult > 1 ? ' ×' + mult : '')
-    + (blast.length ? ' + ' + blast.length * BLAST_PTS + ' Kablam!' : '') : '';
-  feedback(word.toUpperCase() + ' +' + pts + (sum ? ' (' + sum + ')' : ' pts') + recordScore(word), 'good');
+  // show the sum when a power tile or Q/X/Z changed the score: "DONAIRS +79 = 49 + 30 Kablam!",
+  // "QUIZ +36 = 6×6 (Q, Z +1 letter each)", "FOX +32 = 4×4 ×2 (X +1 letter)"
+  const rareLetters = used.filter(t => RARE_LETTERS.has(t.l)).map(t => t.l).join(', ');
+  let sum = rare ? size + '×' + size : String(size * size);
+  if (mult > 1) sum += ' ×' + mult;
+  if (blast.length) sum += ' + ' + blast.length * BLAST_PTS + ' Kablam!';
+  if (rare) sum += ' (' + rareLetters + ' +1 letter' + (rare > 1 ? ' each' : '') + ')';
+  if (!(mult > 1 || blast.length || rare)) sum = '';
+  feedback(word.toUpperCase() + ' +' + pts + (sum ? ' = ' + sum : ' pts') + recordScore(word), 'good');
   bannerEl.textContent = earned ? word.toUpperCase() + ' made ' + POWER_NAMES[earned] + '!' : '';
   busy = true;
   render({clearing: true}); await sleep(200);
@@ -1435,6 +1445,10 @@ let feedbackTimer = null;
 function feedback(text, cls) {
   feedbackEl.textContent = text;
   feedbackEl.className = 'feedback ' + (cls || '');
+  // shrink a long message ("ZAX +85 = 5×5 ×3 + 10 Kablam! (Z, X +1 letter each)") to fit one line, so nothing below moves
+  feedbackEl.style.fontSize = '';
+  let px = parseFloat(getComputedStyle(feedbackEl).fontSize);
+  while (feedbackEl.scrollWidth > feedbackEl.clientWidth && px > 9) feedbackEl.style.fontSize = (px -= 0.5) + 'px';
   if (cls === 'bad') Sound.bad();
   clearTimeout(feedbackTimer);
   feedbackTimer = setTimeout(() => { feedbackEl.textContent = ''; }, 1800);
