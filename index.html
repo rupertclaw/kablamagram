@@ -93,6 +93,27 @@ h1.logo {
 .logo-text span:nth-child(odd)  { transform: translateY(-2px) rotate(-3deg); }
 .logo-text span:nth-child(even) { transform: translateY(2px) rotate(3deg); }
 .toggle-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; min-height: 30px; }
+/* daily streak, and the words made so far (a list that drops down over the board) */
+.streak-chip { font-size: 0.8rem; font-weight: 800; color: #ffe27a; white-space: nowrap; }
+.words-drop { position: relative; }
+button.words-btn {
+  margin: 0; padding: 4px 12px; font-size: 0.8rem; font-weight: 800; border-radius: 999px; white-space: nowrap;
+  background: rgba(255,255,255,0.16); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); text-shadow: none;
+}
+button.words-btn::after { content: ' \25BE'; }
+button.words-btn[aria-expanded="true"]::after { content: ' \25B4'; }
+button.words-btn:active { transform: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
+.words-menu {
+  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 30;
+  min-width: 190px; max-height: 50vh; max-height: 50svh; overflow-y: auto; padding: 8px 6px; border-radius: 14px;
+  background: rgba(30,20,60,0.97); border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 10px 28px rgba(10,4,30,0.55);
+  animation: menu-in 0.15s ease-out;
+}
+@keyframes menu-in { from { opacity: 0; transform: translateX(-50%) translateY(-6px); } }
+.words-menu[hidden] { display: none; }
+.words-menu div { display: flex; justify-content: space-between; gap: 18px; padding: 4px 10px; font-size: 0.95rem; font-weight: 700; letter-spacing: 1px; }
+.words-menu div b { color: #ffe27a; letter-spacing: 0; }
+.words-menu .none { justify-content: center; font-weight: 400; opacity: 0.75; letter-spacing: 0; }
 /* recessed tray the tiles sit in */
 .board-wrap {
   position: relative; border-radius: 20px; padding: 13px 13px 17px; margin-top: 8px; flex: 0 0 auto; max-width: 340px; width: 100%;
@@ -207,7 +228,7 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
   box-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 .tile.power-x2::after { content: '\00d7' '2'; }
-.tile.power-bomb::after { content: '\1f4a3'; padding: 2px 3px; }
+.tile.power-bomb::after { content: '\1f4a5';padding: 2px 3px; }
 .tile.spawn { animation: tile-spawn 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
 @keyframes tile-spawn { from { transform: scale(0) rotate(-30deg); } }
 /* picked tiles turn gold and press down into the tray */
@@ -231,7 +252,6 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
 /* swapped tiles slide in from where they came from (--sx/--sy in cells) */
 .tile.slide { z-index: 1; animation: tile-slide 0.2s ease-out both; }
 @keyframes tile-slide { from { transform: translate(calc(var(--sx) * (100% + var(--gap))), calc(var(--sy) * (100% + var(--gap)))); } }
-.swap-toggle { font-size: 0.75rem; display: flex; align-items: center; gap: 6px; cursor: pointer; opacity: 0.9; }
 /* falling tiles start --drop rows higher (tile height + gap per row) and land with a small bounce */
 .board.falling { overflow: hidden; padding-bottom: 6px; margin-bottom: -6px; } /* keep the tiles' bottom edges visible */
 .tile.fall { animation: tile-fall var(--fall-time) cubic-bezier(0.45, 0, 0.8, 0.6) both; }
@@ -365,7 +385,11 @@ button.install-btn.show { display: block; }
   <button class="install-btn" id="installBtn">&#x2B07; Install</button>
 </div>
 <div class="toggle-row">
-  <label class="swap-toggle"><input type="checkbox" id="swapToggle"> Swipe to swap tiles</label>
+  <span class="streak-chip" id="streakChip" hidden></span>
+  <div class="words-drop">
+    <button class="words-btn" id="wordsBtn" aria-expanded="false" aria-controls="wordsMenu">Words: 0</button>
+    <div class="words-menu" id="wordsMenu" hidden></div>
+  </div>
 </div>
 <div class="score-row">
   <div class="stat"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span></div>
@@ -476,14 +500,14 @@ button.install-btn.show { display: block; }
     <p>Every word and every swap uses a move, and your last move must be a word. You also get 2 free shuffles.</p>
     <ul>
       <li><b>Daily puzzle</b>: everyone gets the same board each day, so you can compare scores with friends. One try per day, and your progress is saved if you leave. A new puzzle arrives at midnight; play on consecutive days to build a streak.</li>
-      <li><b>Play more</b>: as many games as you like on random boards. (Here you can switch swapping off.)</li>
+      <li><b>Play more</b>: as many games as you like on random boards.</li>
     </ul>
 
     <h3>Power tiles</h3>
     <p>Long words leave a power tile where the word ended:</p>
     <div class="help-power"><div class="tile power-wild">?</div><div><b>Wildcard</b> (6-letter word). Stands for any letter you need.</div></div>
     <div class="help-power"><div class="tile power-x2">E</div><div><b>Double</b> (7-letter word). A word using it scores &times;2. Two in one word score &times;4!</div></div>
-    <div class="help-power"><div class="tile power-bomb">R</div><div><b>Bomb</b> (word of 8+ letters). Use it in a word to blast all the tiles around it, +5 points each.</div></div>
+    <div class="help-power"><div class="tile power-bomb">R</div><div><b>Kablam</b> (word of 8+ letters). Use it in a word to blow up all the tiles around it, +5 points each.</div></div>
 
     <h3>Records</h3>
     <p>Your high score for each mode and your longest word ever are saved on this device.</p>
@@ -546,7 +570,7 @@ function seedFor(n) { // FNV-1a hash of the puzzle number
 }
 
 // Records live in this browser only:
-// {mode, swaps, highScores: {daily, moves, 'moves:noswap'}, longestWord: {word, date},
+// {mode, highScores: {daily, moves}, longestWord: {word, date},
 //  daily: today's puzzle in progress or finished, streak: {count, lastN}}
 const STORE_KEY = 'wordcrush.v1';
 function loadStore() {
@@ -562,6 +586,7 @@ function saveStore() {
 }
 const store = loadStore();
 store.highScores = store.highScores || {};
+delete store.swaps; // swapping can no longer be switched off
 store.learned = store.learned || []; // words this device found on Wiktionary, so they work offline too
 for (const w of store.learned) WORDS.add(w);
 
@@ -570,22 +595,18 @@ let path = [];      // [[r, c], ...] tiles the player has tapped, in order
 let wordsMade = []; // {word, pts}
 let moveLog = [];   // for the share message: {len, bomb} per word, 'swap' per swap
 let mode = store.mode === 'practice' ? 'practice' : 'daily';
-let swapsOn = store.swaps !== false; // the switch only applies to Play more
 let dailyNum = dailyNumber();
 let startHigh = 0;  // high score when this game began, to spot a new record at the end
 let shufflesLeft = Infinity;
 let lastSwap = null; // [r1, c1, r2, c2] of the swap Undo can take back
 
-// The daily always allows swapping, so everyone plays by the same rules
-function swapsEnabled() { return mode === 'daily' || swapsOn; }
-// Games with and without swapping aren't comparable, so they keep separate high scores
-// ('moves' is Play more's key, kept from when it was the 10-move mode, so old records carry over)
-function scoreKey() { return mode === 'daily' ? 'daily' : swapsOn ? 'moves' : 'moves:noswap'; }
+// High score key per mode ('moves' is Play more's, kept from when it was the 10-move mode, so old records carry over)
+function scoreKey() { return mode === 'daily' ? 'daily' : 'moves'; }
 
 const boardEl = document.getElementById('board');
 const currentWordEl = document.getElementById('currentWord');
 const feedbackEl = document.getElementById('feedback');
-// Short messages ("TRAINERS earned a bomb!") show in the word line while no word is being spelled,
+// Short messages ("TRAINERS made a Kablam tile...") show in the word line while no word is being spelled,
 // so the page needs no extra line for them
 let bannerText = '';
 const bannerEl = { get textContent() { return bannerText; }, set textContent(v) { bannerText = v; showWordLine(); } };
@@ -601,7 +622,7 @@ const submitBtn = document.getElementById('submitBtn');
 // 'x2' (doubles the word's score) or 'bomb' (also blasts the tiles around it).
 function newTile(l, p = null) { return {l, p}; }
 const POWER_FOR_LENGTH = {6: 'wild', 7: 'x2', 8: 'bomb'};
-const POWER_NAMES = {wild: 'a ? wildcard (any letter)', x2: 'a ×2 tile (doubles a word)', bomb: 'a bomb (blasts its neighbours)'};
+const POWER_NAMES = {wild: 'a ? wildcard: use it as any letter', x2: 'a ×2 tile: use it to double a word', bomb: 'a Kablam tile: use it to blow up its neighbours'};
 const BLAST_PTS = 5; // per tile a bomb blows up
 
 function randomGrid() {
@@ -671,22 +692,22 @@ function resetGame() {
   document.getElementById('gameOver').classList.remove('show');
 }
 
-// Mode tabs, the swap switch (Play more only) and New Game (Play more only: the daily has one attempt)
+// Mode tabs, the streak (daily only) and New Game (Play more only: the daily has one attempt)
 function refreshModeUi() {
   const done = store.daily && store.daily.n === dailyNumber() && store.daily.over;
   document.querySelector('#modeRow [data-mode="daily"]').textContent = 'Daily #' + dailyNumber() + (done ? ' ✓' : '');
   document.querySelectorAll('#modeRow button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  document.getElementById('swapToggle').checked = swapsOn;
-  document.querySelector('.swap-toggle').style.display = mode === 'daily' ? 'none' : '';
   document.getElementById('newBtn').style.display = mode === 'daily' ? 'none' : '';
   document.getElementById('againBtn').textContent = mode === 'daily' ? 'Play more' : 'Play again';
-  updateToggleRow();
-}
-// The swap switch's row (Play more only) takes no space in the daily
-function updateToggleRow() {
-  const swapShown = document.querySelector('.swap-toggle').style.display !== 'none';
-  document.querySelector('.toggle-row').style.display = swapShown ? '' : 'none';
+  const streak = currentStreak(), chip = document.getElementById('streakChip');
+  chip.hidden = mode !== 'daily' || !streak;
+  chip.textContent = '\u{1F525} ' + streak + '-day streak';
   fitToScreen();
+}
+// Days in a row with a finished daily, counting yesterday's run as still alive until today's is played
+function currentStreak() {
+  const s = store.streak, n = dailyNumber();
+  return s && (s.lastN === n || s.lastN === n - 1) ? s.count : 0;
 }
 
 function newGame() {
@@ -699,7 +720,7 @@ function newGame() {
   refreshModeUi();
   render();
   saveGame();
-  track('game_start', {mode, swaps: swapsEnabled(), ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+  track('game_start', {mode, ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
 }
 
 // Both games are saved after every move (and the moment new letters fall in), so closing the app
@@ -755,7 +776,7 @@ function endGame() {
   showResult(true);
   const swaps = moves - wordsMade.length;
   Sound.end(score > startHigh);
-  track('game_over', {mode, swaps: swapsEnabled(), score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
+  track('game_over', {mode, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
     ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
 }
 
@@ -770,11 +791,11 @@ function showResult(fresh) {
   if (fresh && score > startHigh) { high.textContent = daily ? 'Your best daily score!' : 'New high score!'; high.className = 'new-high'; }
   else { high.textContent = (daily ? 'Best daily: ' : 'High score: ') + Math.max(startHigh, score); high.className = 'detail'; }
   document.getElementById('bestLine').textContent = best
-    ? plural(wordsMade.length, 'word') + (swapsEnabled() ? ', ' + plural(swaps, 'swap') : '')
+    ? plural(wordsMade.length, 'word') + ', ' + plural(swaps, 'swap')
       + ' · best: ' + best.word.toUpperCase() + ' (+' + best.pts + ')'
     : 'No words this time';
   const streak = store.streak && store.streak.lastN === dailyNum ? store.streak.count : 0;
-  document.getElementById('streakLine').textContent = daily && streak > 1 ? '\u{1F525} ' + streak + '-day streak' : '';
+  document.getElementById('streakLine').textContent = daily && streak >= 1 ? '\u{1F525} ' + streak + '-day streak' : '';
   updateCountdown();
   document.getElementById('shareNote').textContent = '';
   prepareShareFile(fresh && score > startHigh);
@@ -795,12 +816,12 @@ setInterval(updateCountdown, 30000);
 const SHARE_URL = 'https://kablamagram.com';
 const bestWord = () => wordsMade.reduce((b, w) => (!b || w.pts > b.pts ? w : b), null);
 
-// Wordle-style result: a keycap number per word (with a bomb if one went off), a swirl per swap
+// Wordle-style result: a keycap number per word (with a 💥 if a Kablam tile went off), a swirl per swap
 function shareText() {
   const best = bestWord();
   const keycap = n => n > 9 ? (n === 10 ? '\u{1F51F}' : '(' + n + ')') : n +'️⃣';
-  const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A3}' : ''));
-  return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle' : 'Kablamagram \u{1F4A5} 10 moves' + (swapsOn ? '' : ' (no swaps)')) + '\n'
+  const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A5}' : ''));
+  return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle' : 'Kablamagram \u{1F4A5} 10 moves') + '\n'
     + score + ' points' + (best ? ' · best word ' + best.word.toUpperCase() + ' (+' + best.pts + ')' : '') + '\n'
     + (line.length ? 'My ' + line.length + ' moves: ' + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n' : '')
     + 'Can you beat it? ' + SHARE_URL;
@@ -831,6 +852,47 @@ function drawTile(ctx, x, y, s, label, [top, bot, edge], font) {
   ctx.fillStyle = '#fff'; ctx.fillText(label, x + s / 2, y + s / 2 + s * 0.02);
 }
 
+// The header logo drawn on a canvas: Bangers letters bouncing up and down, tilted, with the same
+// orange-to-brown 3-D extrusion, dark outline and soft drop shadow (sizes scale from the 48px header)
+function drawLogo(ctx, cx, cy, px) {
+  const k = px / 48, letters = [...'KABLAMAGRAM'], gap = 1.5 * k;
+  const DEPTH = ['#ffb300', '#ff9100', '#f57200', '#e05500', '#b83c00', '#7a2400', '#2a0d00'];
+  ctx.save();
+  ctx.font = px + 'px Bangers, Impact, "Arial Black", sans-serif';
+  if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const widths = letters.map(l => ctx.measureText(l).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gap * (letters.length - 1);
+  ctx.translate(cx, cy); ctx.rotate(-4 * Math.PI / 180);
+  // each pass draws every letter, bobbing and tilting alternately like the header's spans
+  const pass = (dx, dy, paint) => {
+    let x = -total / 2;
+    letters.forEach((l, i) => {
+      const odd = i % 2 === 0; // CSS nth-child counts from 1
+      ctx.save();
+      ctx.translate(x + widths[i] / 2, odd ? -2 * k : 2 * k);
+      ctx.rotate((odd ? -3 : 3) * Math.PI / 180);
+      paint(l, dx, dy);
+      ctx.restore();
+      x += widths[i] + gap;
+    });
+  };
+  // drop shadow under the whole extrusion
+  ctx.shadowColor = 'rgba(20,5,40,0.55)'; ctx.shadowBlur = 10 * k; ctx.shadowOffsetX = 1 * k; ctx.shadowOffsetY = 3 * k;
+  ctx.fillStyle = DEPTH[6]; ctx.strokeStyle = DEPTH[6]; ctx.lineWidth = 2 * k;
+  pass(7 * k, 7 * k, (l, dx, dy) => { ctx.strokeText(l, dx, dy); ctx.fillText(l, dx, dy); });
+  ctx.shadowColor = 'transparent';
+  // the extrusion, deepest layer first
+  for (let d = 6; d >= 1; d--) {
+    ctx.fillStyle = ctx.strokeStyle = DEPTH[d - 1];
+    pass(d * k, d * k, (l, dx, dy) => { ctx.strokeText(l, dx, dy); ctx.fillText(l, dx, dy); });
+  }
+  // the face: dark outline, then yellow
+  ctx.strokeStyle = '#2a0d00'; ctx.lineWidth = 2 * k; ctx.fillStyle = '#ffe93d';
+  pass(0, 0, (l, dx, dy) => { ctx.strokeText(l, dx, dy); ctx.fillText(l, dx, dy); });
+  ctx.restore();
+}
+
 function makeShareCanvas(newHigh) {
   const W = 1080, H = 1350, cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -842,13 +904,9 @@ function makeShareCanvas(newHigh) {
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
   // logo and mode
-  spacing(6); ctx.font = font(900, 96);
-  const lg = ctx.createLinearGradient(0, 70, 0, 160);
-  lg.addColorStop(0, '#fff6c8'); lg.addColorStop(0.55, '#ffd54f'); lg.addColorStop(1, '#e09a10');
-  ctx.fillStyle = 'rgba(40,20,80,0.45)'; ctx.fillText('KABLAMAGRAM', W / 2, 156);
-  ctx.fillStyle = lg; ctx.fillText('KABLAMAGRAM', W / 2, 150);
+  drawLogo(ctx, W / 2, 136, 150);
   spacing(3); ctx.font = font(700, 40); ctx.fillStyle = '#e4dcff';
-  ctx.fillText(mode === 'daily' ? 'DAILY PUZZLE #' + dailyNum : '10 MOVES' + (swapsOn ? '' : ' · NO SWAPS'), W / 2, 222);
+  ctx.fillText(mode === 'daily' ? 'DAILY PUZZLE #' + dailyNum : '10 MOVES', W / 2, 272);
   // score
   spacing(0); ctx.font = font(900, 190); ctx.fillStyle = 'rgba(40,20,80,0.4)'; ctx.fillText(String(score), W / 2, 432);
   ctx.fillStyle = '#fff'; ctx.fillText(String(score), W / 2, 424);
@@ -886,8 +944,9 @@ function makeShareCanvas(newHigh) {
 
 // Made when the game ends, so it's ready the instant Share is tapped (share sheets need the tap)
 let shareFile = null;
-function prepareShareFile(newHigh) {
+async function prepareShareFile(newHigh) {
   shareFile = null;
+  try { await document.fonts.load('48px Bangers'); } catch (e) { /* draws with a fallback font */ }
   try {
     makeShareCanvas(newHigh).toBlob(b => {
       if (!b) return;
@@ -987,12 +1046,23 @@ function renderStats() {
     : 'Longest word ever: none yet';
 }
 
-// The words made this game, listed on the results card
+// The words made this game: listed on the results card, and in the Words list above the board
 function updateWordsPanel() {
   document.getElementById('wordsLine').innerHTML = wordsMade.length
     ? wordsMade.map(w => w.word.toUpperCase() + ' <b>+' + w.pts + '</b>').join(' &middot; ')
     : '';
+  document.getElementById('wordsBtn').textContent = 'Words: ' + wordsMade.length;
+  document.getElementById('wordsMenu').innerHTML = wordsMade.length
+    ? wordsMade.map(w => '<div><span>' + w.word.toUpperCase() + '</span><b>+' + w.pts + '</b></div>').join('')
+    : '<div class="none">No words yet</div>';
 }
+function showWordsMenu(open) {
+  document.getElementById('wordsMenu').hidden = !open;
+  document.getElementById('wordsBtn').setAttribute('aria-expanded', open);
+}
+document.getElementById('wordsBtn').onclick = () => showWordsMenu(document.getElementById('wordsMenu').hidden);
+// any tap outside the list closes it (and still does what it was meant to)
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.words-drop')) showWordsMenu(false); }, true);
 
 // Fit the whole game on one screen: if the content would reach past the bottom, shrink the board just
 // enough (it's the only part that can shrink; its height follows its width). "The screen" is the small
@@ -1078,7 +1148,7 @@ function tapTile(r, c) {
 // Swapping costs a move but never scores by itself. Any word in progress keeps its
 // tiles, so you can swap a better letter into a word you're spelling.
 async function swapTiles(r1, c1, r2, c2) {
-  if (busy || over || !swapsEnabled()) return;
+  if (busy || over) return;
   if (r2 < 0 || r2 >= ROWS || c2 < 0 || c2 >= COLS) return;
   const a = grid[r1][c1], b = grid[r2][c2];
   if (a.l === b.l && a.p === b.p) return; // identical tiles: nothing would change
@@ -1107,7 +1177,7 @@ boardEl.addEventListener('pointerdown', e => {
   boardEl.setPointerCapture(e.pointerId);
 });
 boardEl.addEventListener('pointermove', e => {
-  if (!gesture || gesture.swiped || !swapsEnabled()) return;
+  if (!gesture || gesture.swiped) return;
   const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
   const tileSize = boardEl.firstElementChild.getBoundingClientRect().width;
   if (Math.hypot(dx, dy) < tileSize * 0.45) return;
@@ -1211,9 +1281,11 @@ async function submitWord() {
   track('word_scored', {mode, length: word.length, points: pts});
   if (earned) track('power_tile', {type: earned});
   updateWordsPanel();
-  feedback(word.toUpperCase() + ' +' + pts + ' pts' + (mult > 1 ? ' (×' + mult + ')' : '')
-    + (blast.length ? ' · BOOM!' : '') + recordScore(word), 'good');
-  bannerEl.textContent = earned ? word.toUpperCase() + ' earned ' + POWER_NAMES[earned] + '!' : '';
+  // show the sum when a power tile changed the score, e.g. "DONAIRS +79 (49 + 30 Kablam!)"
+  const sum = mult > 1 || blast.length ? word.length * word.length + (mult > 1 ? ' ×' + mult : '')
+    + (blast.length ? ' + ' + blast.length * BLAST_PTS + ' Kablam!' : '') : '';
+  feedback(word.toUpperCase() + ' +' + pts + (sum ? ' (' + sum + ')' : ' pts') + recordScore(word), 'good');
+  bannerEl.textContent = earned ? word.toUpperCase() + ' made ' + POWER_NAMES[earned] + '!' : '';
   busy = true;
   render({clearing: true}); await sleep(200);
   for (const [i, [r, c]] of path.entries()) { explodeTile(r, c); Sound.pop(i); await sleep(200); } // one by one, in spelling order
@@ -1460,15 +1532,6 @@ confirmBox.onclick = e => { if (e.target === confirmBox) closeHelp(); };
 
 document.getElementById('newBtn').onclick = () => leaveGame(newGame);
 document.querySelectorAll('#modeRow button').forEach(b => b.onclick = () => switchMode(b.dataset.mode));
-document.getElementById('swapToggle').onchange = e => {
-  const want = e.target.checked;
-  e.target.checked = swapsOn; // stays as it was unless they confirm
-  leaveGame(() => {
-    swapsOn = want;
-    store.swaps = swapsOn; saveStore();
-    newGame();
-  });
-};
 
 // How to play: the full guide behind the ? button (first-time players get the quick tips instead)
 const helpEl = document.getElementById('help');
@@ -1537,7 +1600,7 @@ const isInstalled = () => matchMedia('(display-mode: standalone)').matches || na
 const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const isMobile = isIos || /android/i.test(navigator.userAgent);
 let installPrompt = null;
-function updateInstallBtn() { installBtn.classList.toggle('show', !isInstalled() && (!!installPrompt || isMobile)); updateToggleRow(); }
+function updateInstallBtn() { installBtn.classList.toggle('show', !isInstalled() && (!!installPrompt || isMobile)); fitToScreen(); }
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; updateInstallBtn(); });
 window.addEventListener('appinstalled', () => { installPrompt = null; installBtn.classList.remove('show'); track('app_installed'); });
 if (isInstalled()) track('opened_as_app');
