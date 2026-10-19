@@ -584,8 +584,25 @@ function saveStore() {
     // the analytics opt-out and EU consent can also be changed on the privacy page: keep whatever was last saved
     const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
     for (const k of ['analytics', 'consent']) { if (k in saved) store[k] = saved[k]; else delete store[k]; }
+    mergeSaved(saved);
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   } catch (e) { /* storage blocked: records just won't persist */ }
+}
+// Another copy of the game (the installed app and a browser tab, say) may have saved since this one
+// loaded. Never let this copy's older view overwrite it: keep the furthest daily, the best records.
+const dailyProgress = d => d ? d.n * 1000 + (d.over ? 999 : d.moves || 0) : -1;
+function mergeSaved(saved) {
+  if (dailyProgress(saved.daily) > dailyProgress(store.daily)) store.daily = saved.daily;
+  const hs = store.highScores = store.highScores || {};
+  for (const [k, v] of Object.entries(saved.highScores || {})) if (v > (hs[k] || 0)) hs[k] = v;
+  const a = saved.streak, b = store.streak;
+  if (a && (!b || a.lastN > b.lastN || (a.lastN === b.lastN && a.count > b.count))) store.streak = a;
+  if (saved.longestWord && (!store.longestWord || saved.longestWord.word.length > store.longestWord.word.length)) store.longestWord = saved.longestWord;
+  if (saved.learned) {
+    store.learned = [...new Set([...(store.learned || []), ...saved.learned])];
+    for (const w of saved.learned) WORDS.add(w);
+  }
+  for (const k of ['seenTips', 'seenHelp', 'seenNotice']) if (saved[k]) store[k] = saved[k];
 }
 const store = loadStore();
 store.highScores = store.highScores || {};
@@ -748,10 +765,12 @@ function openDaily() {
   dailyNum = d.n; seeded = true;
   ({grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState} = d);
   lastSwap = d.lastSwap || null;
+  over = !!d.over; // before drawing, so a finished daily's buttons show greyed out
   updateWordsPanel();
   refreshModeUi();
   render();
-  if (d.over) { over = true; showResult(false); }
+  if (over) showResult(false);
+  else if (moves >= MODES[mode].moveLimit) endGame(); // closed during the last word's animation
 }
 // Play more: carry on with the saved game if it isn't finished, otherwise start a new one
 function openPractice() {
@@ -765,6 +784,7 @@ function openPractice() {
   updateWordsPanel();
   refreshModeUi();
   render();
+  if (moves >= MODES[mode].moveLimit) endGame(); // closed during the last word's animation
 }
 function switchMode(m) { // both games are saved, so switching never loses anything
   if (busy || m === mode) return;
@@ -1130,9 +1150,10 @@ function render({clearing, drops, slides} = {}) {
   showWordLine();
   submitBtn.disabled = busy || over || path.length < 3;
   document.getElementById('undoBtn').disabled = busy || over || (!path.length && !lastSwap);
+  document.getElementById('clearBtn').disabled = over || !path.length; // a finished game greys out every play button
   const shuffleBtn = document.getElementById('shuffleBtn');
   shuffleBtn.textContent = shufflesLeft === Infinity ? 'Shuffle' : 'Shuffle (' + shufflesLeft + ')';
-  shuffleBtn.disabled = shufflesLeft <= 0;
+  shuffleBtn.disabled = over || shufflesLeft <= 0;
   renderStats();
 }
 
@@ -1654,8 +1675,18 @@ fitToScreen();
   fitToScreen();
   if (!store.seenTips && !store.seenHelp) startTips(); else showFirstVisitNotice();
 });
-// coming back to the app after midnight: if today's daily was finished, open the new one
-document.addEventListener('visibilitychange', () => { if (!document.hidden) updateCountdown(); });
+// Coming back to this copy of the game: pick up anything another copy (app or tab) saved meanwhile,
+// so a daily finished elsewhere shows as finished here and can't be played again
+function syncFromDisk() {
+  if (busy) return;
+  const before = store.daily;
+  mergeSaved(loadStore());
+  if (mode === 'daily' && store.daily !== before) openDaily();
+  else { refreshModeUi(); renderStats(); }
+}
+window.addEventListener('storage', e => { if (e.key === STORE_KEY) syncFromDisk(); });
+// ...and after midnight: if today's daily was finished, open the new one
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncFromDisk(); updateCountdown(); } });
 </script>
 </body>
 </html>
