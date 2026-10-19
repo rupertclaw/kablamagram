@@ -221,14 +221,16 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
 .tile.power-wild { --top: #e08bff; --bot: #9b2fe0; --edge: #5f1a96; animation: wild-glow 1.6s ease-in-out infinite; }
 @keyframes wild-glow { 50% { filter: brightness(1.2) saturate(1.2); } }
 .tile.power-x2 { --top: #74c8ff; --bot: #1f78d8; --edge: #0d4a96; }
+.tile.power-x3 { --top: #8ef07a; --bot: #25a83a; --edge: #10691f; }
 .tile.power-bomb { --top: #6a6a7c; --bot: #24242e; --edge: #08080c; }
-.tile.power-x2::after, .tile.power-bomb::after {
+.tile.power-x2::after, .tile.power-x3::after, .tile.power-bomb::after {
   position: absolute; top: 3px; right: 3px; font-size: 0.42em; line-height: 1; text-shadow: none; pointer-events: none;
   background: #ffd54f; color: #5a3b00; border-radius: 6px; padding: 2px 4px; font-weight: 900;
   box-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 .tile.power-x2::after { content: '\00d7' '2'; }
-.tile.power-bomb::after { content: '\1f4a5';padding: 2px 3px; }
+.tile.power-x3::after { content: '\00d7' '3'; }
+.tile.power-bomb::after { content: '\1f4a5'; padding: 2px 3px; }
 .tile.spawn { animation: tile-spawn 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
 @keyframes tile-spawn { from { transform: scale(0) rotate(-30deg); } }
 /* picked tiles turn gold and press down into the tray */
@@ -507,7 +509,8 @@ button.install-btn.show { display: block; }
     <p>Long words leave a power tile where the word ended:</p>
     <div class="help-power"><div class="tile power-wild">?</div><div><b>Wildcard</b> (6-letter word). Stands for any letter you need.</div></div>
     <div class="help-power"><div class="tile power-x2">E</div><div><b>Double</b> (7-letter word). A word using it scores &times;2. Two in one word score &times;4!</div></div>
-    <div class="help-power"><div class="tile power-bomb">R</div><div><b>Kablam</b> (word of 8+ letters). Use it in a word to blow up all the tiles around it, +5 points each.</div></div>
+    <div class="help-power"><div class="tile power-bomb">R</div><div><b>Kablam</b> (8- or 9-letter word). Use it in a word to blow up all the tiles around it, +5 points each.</div></div>
+    <div class="help-power"><div class="tile power-x3">N</div><div><b>Triple</b> (word of 10+ letters). A word using it scores &times;3.</div></div>
 
     <h3>Records</h3>
     <p>Your high score for each mode and your longest word ever are saved on this device.</p>
@@ -602,6 +605,11 @@ let lastSwap = null; // [r1, c1, r2, c2] of the swap Undo can take back
 
 // High score key per mode ('moves' is Play more's, kept from when it was the 10-move mode, so old records carry over)
 function scoreKey() { return mode === 'daily' ? 'daily' : 'moves'; }
+// The high score shown: the daily's own best in the daily; in Play more, the best of any game (daily included)
+function shownHigh() {
+  const h = store.highScores;
+  return mode === 'daily' ? h.daily || 0 : Math.max(h.moves || 0, h.daily || 0);
+}
 
 const boardEl = document.getElementById('board');
 const currentWordEl = document.getElementById('currentWord');
@@ -619,10 +627,10 @@ function showWordLine() {
 const submitBtn = document.getElementById('submitBtn');
 
 // A tile is {l: letter, p: power}. Power is null, 'wild' (letter '?', stands for any letter),
-// 'x2' (doubles the word's score) or 'bomb' (also blasts the tiles around it).
+// 'x2' / 'x3' (double / triple the word's score) or 'bomb' (blasts the tiles around it; players see it as "Kablam").
 function newTile(l, p = null) { return {l, p}; }
-const POWER_FOR_LENGTH = {6: 'wild', 7: 'x2', 8: 'bomb'};
-const POWER_NAMES = {wild: 'a ? wildcard: use it as any letter', x2: 'a ×2 tile: use it to double a word', bomb: 'a Kablam tile: use it to blow up its neighbours'};
+const POWER_FOR_LENGTH = {6: 'wild', 7: 'x2', 8: 'bomb', 9: 'bomb', 10: 'x3'};
+const POWER_NAMES = {wild: 'a ? wildcard: use it as any letter', x2: 'a ×2 tile: use it to double a word', x3: 'a ×3 tile: use it to triple a word', bomb: 'a Kablam tile: use it to blow up its neighbours'};
 const BLAST_PTS = 5; // per tile a bomb blows up
 
 function randomGrid() {
@@ -687,7 +695,7 @@ function resetGame() {
   score = 0; moves = 0; path = []; busy = false; over = false;
   wordsMade = []; moveLog = []; lastSwap = null;
   shufflesLeft = MODES[mode].shuffles;
-  startHigh = store.highScores[scoreKey()] || 0;
+  startHigh = shownHigh();
   bannerEl.textContent = '';
   document.getElementById('gameOver').classList.remove('show');
 }
@@ -816,13 +824,14 @@ setInterval(updateCountdown, 30000);
 const SHARE_URL = 'https://kablamagram.com';
 const bestWord = () => wordsMade.reduce((b, w) => (!b || w.pts > b.pts ? w : b), null);
 
-// Wordle-style result: a keycap number per word (with a 💥 if a Kablam tile went off), a swirl per swap
+// Wordle-style result: a keycap number per word (with a 💥 if a Kablam tile went off), a swirl per swap.
+// Shares never name the words (no spoilers for friends playing the same daily): just the best one's length and points.
 function shareText() {
   const best = bestWord();
   const keycap = n => n > 9 ? (n === 10 ? '\u{1F51F}' : '(' + n + ')') : n +'️⃣';
   const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A5}' : ''));
   return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle' : 'Kablamagram \u{1F4A5} 10 moves') + '\n'
-    + score + ' points' + (best ? ' · best word ' + best.word.toUpperCase() + ' (+' + best.pts + ')' : '') + '\n'
+    + score + ' points' + (best ? ' · best word: ' + best.word.length + ' letters, +' + best.pts : '') + '\n'
     + (line.length ? 'My ' + line.length + ' moves: ' + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n' : '')
     + 'Can you beat it? ' + SHARE_URL;
 }
@@ -912,16 +921,15 @@ function makeShareCanvas(newHigh) {
   ctx.fillStyle = '#fff'; ctx.fillText(String(score), W / 2, 424);
   spacing(4); ctx.font = font(800, 44); ctx.fillStyle = '#ffe27a';
   ctx.fillText(newHigh ? '★ POINTS · NEW HIGH SCORE ★' : 'POINTS', W / 2, 492);
-  // best word as tiles
+  // best word: its length and points only, so the word itself isn't a spoiler
   const best = bestWord();
   if (best) {
     spacing(3); ctx.font = font(700, 38); ctx.fillStyle = '#e4dcff';
-    ctx.fillText('BEST WORD  +' + best.pts, W / 2, 600);
-    const letters = best.word.toUpperCase().split(''), gap = 12;
-    const s = Math.min(112, Math.floor((920 - gap * (letters.length - 1)) / letters.length));
-    let x = (W - (s * letters.length + gap * (letters.length - 1))) / 2;
-    spacing(0);
-    for (const ch of letters) { drawTile(ctx, x, 630, s, ch, TILE_RED, font(800, Math.round(s * 0.55))); x += s + gap; }
+    ctx.fillText('BEST WORD', W / 2, 620);
+    spacing(1); ctx.font = font(900, 84);
+    const line = best.word.length + ' LETTERS  ·  +' + best.pts;
+    ctx.fillStyle = 'rgba(40,20,80,0.4)'; ctx.fillText(line, W / 2, 726);
+    ctx.fillStyle = '#fff'; ctx.fillText(line, W / 2, 720);
   }
   // my moves: a numbered tile per word (dark if a bomb went off), a teal swap tile per swap
   if (moveLog.length) {
@@ -1039,7 +1047,7 @@ function renderStats() {
   document.getElementById('progressLabel').textContent = 'Moves';
   document.getElementById('progress').textContent = moves + ' / ' + m.moveLimit;
   document.getElementById('highLabel').textContent = mode === 'daily' ? 'Best daily' : 'High';
-  document.getElementById('high').textContent = store.highScores[scoreKey()] || 0;
+  document.getElementById('high').textContent = shownHigh();
   const lw = store.longestWord;
   document.getElementById('records').textContent = lw
     ? 'Longest word ever: ' + lw.word.toUpperCase() + ' (' + lw.word.length + ' letters, ' + new Date(lw.date).toLocaleDateString() + ')'
@@ -1260,7 +1268,7 @@ async function submitWord() {
   }
   // power tiles in the word: each x2 doubles it, each bomb blasts its neighbours outside the word
   const used = path.map(([r, c]) => grid[r][c]);
-  const mult = 2 ** used.filter(t => t.p === 'x2').length;
+  const mult = used.reduce((m, t) => m * (t.p === 'x2' ? 2 : t.p === 'x3' ? 3 : 1), 1);
   const blast = [];
   for (const [r, c] of path) {
     if (grid[r][c].p !== 'bomb') continue;
@@ -1271,7 +1279,7 @@ async function submitWord() {
     }
   }
   const pts = word.length * word.length * mult + blast.length * BLAST_PTS;
-  const earned = POWER_FOR_LENGTH[Math.min(word.length, 8)]; // 8 letters or more: bomb
+  const earned = POWER_FOR_LENGTH[Math.min(word.length, 10)]; // 10 letters or more: x3
   score += pts;
   moves++;
   wordsMade.push({word, pts});
