@@ -43,17 +43,18 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
   <p>Your high scores, longest word, words found online, chosen mode and settings (sound, whether you've seen the guide) are stored in your browser's local storage. They are never sent to us. They stay until you clear your browser data or uninstall the app.</p>
 
   <h2>Anonymous usage statistics</h2>
-  <p>We use Google Analytics to understand how the game is used. It records:</p>
+  <p>We use two analytics services, Google Analytics and Umami, to understand how the game is used. They record:</p>
   <ul>
     <li>pages viewed, and whether the game was opened in a browser or as an installed app</li>
     <li>game events: games started and finished, mode, score, the <i>length</i> of words played (not the words themselves), words the game didn't recognise or found online (so missing ones can be added to the dictionary), power tiles earned, shares, installs, and use of the help and sound buttons</li>
     <li>device type, browser, operating system and screen size</li>
-    <li>approximate location (country and city), worked out from your IP address. Google Analytics does not store IP addresses.</li>
+    <li>approximate location (country and city), worked out from your IP address. Neither service stores IP addresses.</li>
   </ul>
   <p>We don't collect names, emails or anything that identifies you directly. The data is used only to improve Kablamagram. It is not sold, and it is not used for advertising.</p>
 
   <h2>Cookies</h2>
   <p>Google Analytics sets cookies (named <code>_ga</code>) so it can tell one visit from another. If you're in the EU/EEA, the UK or Switzerland, analytics cookies are only used if you tap <b>Allow</b> when the game asks. Otherwise Google only receives basic, cookieless signals that can't recognise you on a later visit.</p>
+  <p>Umami uses no cookies at all and collects nothing that identifies you, so it counts every visit unless you switch analytics off below.</p>
 
   <h2>Your choice</h2>
   <div class="optout">
@@ -69,6 +70,7 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
   <h2>Other services</h2>
   <ul>
     <li><b>Wiktionary</b> (run by the Wikimedia Foundation) is used to check unknown words: see the <a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" rel="noopener">Wikimedia privacy policy</a>.</li>
+    <li><b>Umami</b> (cookie-free analytics): see <a href="https://umami.is/privacy" rel="noopener">Umami's privacy policy</a>.</li>
     <li><b>Google Analytics</b>: see <a href="https://policies.google.com/privacy" rel="noopener">Google's privacy policy</a> and <a href="https://policies.google.com/technologies/partner-sites" rel="noopener">how Google uses information from sites that use its services</a>.</li>
     <li><b>GitHub Pages</b> hosts the game and may log technical data such as IP addresses for security. See <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub's privacy statement</a>.</li>
   </ul>
@@ -95,7 +97,7 @@ function show() {
   const s = load();
   allow.hidden = true; main.hidden = false;
   if (s.analytics === false) {
-    statusEl.textContent = 'Analytics is OFF on this device. Nothing is sent to Google Analytics.';
+    statusEl.textContent = 'Analytics is OFF on this device. Nothing is sent to Google Analytics or Umami.';
     main.textContent = 'Turn analytics back on';
   } else if (inEurope && s.consent === 'granted') {
     statusEl.textContent = 'You allowed anonymous stats with cookies on this device.';

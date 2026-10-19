@@ -29,7 +29,10 @@
      Consent Mode by region: analytics cookies everywhere except the EU/EEA, UK and Switzerland, where
      Google only gets cookieless pings unless the player taps Allow on the consent prompt (shown to
      anyone on a European time zone). Never any ad cookies. Players can opt out entirely on the
-     privacy page. -->
+     privacy page.
+     Umami (cookieless, no personal data, so no consent needed) gets the same page view and game
+     events, so visitors who decline cookies or block Google are still counted. Same rules: real site
+     only, and the privacy page's opt-out stops it too. -->
 <script>
 window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
@@ -54,6 +57,22 @@ if (GA_LIVE && !gaOptedOut) {
   const s = document.createElement('script');
   s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
   document.head.appendChild(s);
+}
+// Umami: game events made before its script arrives wait in this queue (capped, in case it's blocked)
+const UMAMI_ID = '9742d090-50eb-4a8d-abb7-4b75d79d1a6d';
+const UMAMI_ON = GA_LIVE && !gaOptedOut;
+const umamiQueue = [];
+function umamiTrack(name, data) {
+  if (!UMAMI_ON) return;
+  if (window.umami && window.umami.track) window.umami.track(name, data);
+  else if (umamiQueue.length < 50) umamiQueue.push([name, data]);
+}
+if (UMAMI_ON) {
+  const u = document.createElement('script');
+  u.defer = true; u.src = 'https://cloud.umami.is/script.js';
+  u.dataset.websiteId = UMAMI_ID; u.dataset.domains = 'kablamagram.com';
+  u.onload = () => { for (const [name, data] of umamiQueue.splice(0)) umamiTrack(name, data); };
+  document.head.appendChild(u);
 }
 </script>
 <style>
@@ -439,8 +458,8 @@ button.install-btn.show { display: block; }
   <button id="shuffleBtn" class="btn-teal">Shuffle</button>
 </div>
 <div class="consent" id="consentPrompt" role="dialog" aria-label="Analytics consent">
-  Your scores are saved on this device. Can we count your visit to help improve the game?
-  Anonymous stats, no ads, nothing sold. <a href="privacy.html">Privacy</a>
+  Your scores are saved on this device. Can we use an analytics cookie to count your return visits?
+  Anonymous, no ads, nothing sold. <a href="privacy.html">Privacy</a>
   <div><button id="consentNo">No thanks</button><button class="primary" id="consentYes">Allow</button></div>
 </div>
 <div class="consent" id="notice" role="status">
@@ -662,7 +681,7 @@ function randomGrid() {
 }
 
 // Analytics events (GA4, set up in <head>). Off the live site gtag only queues them locally.
-function track(name, params = {}) { gtag('event', name, params); }
+function track(name, params = {}) { gtag('event', name, params); umamiTrack(name, params); }
 
 // Sound effects, synthesised with Web Audio: no files to download, works offline.
 // The audio context starts on the first tap (browsers block sound before a user gesture).
