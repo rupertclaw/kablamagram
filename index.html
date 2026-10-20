@@ -21,7 +21,8 @@
   "operatingSystem": "Any",
   "inLanguage": "en",
   "isAccessibleForFree": true,
-  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "publisher": {"@type": "Organization", "name": "Puzzlewick Studios", "url": "https://puzzlewickstudios.itch.io/"}
 }
 </script>
 <!-- Link previews (Facebook, WhatsApp, Messages, X...) -->
@@ -383,6 +384,8 @@ button.install-btn.show { display: block; }
   padding: 16px; background: rgba(15,8,40,0.7);
 }
 .help.show { display: flex; }
+.more-games { text-align: center; font-size: 0.8rem; opacity: 0.85; margin-top: 8px; line-height: 1.4; } /* link to the studio's other game */
+.more-games a { color: #ffe27a; font-weight: 700; }
 .help-card {
   width: 100%; max-width: 380px; max-height: calc(100vh - 32px); max-height: calc(100svh - 32px); overflow-y: auto; padding: 18px 18px 14px;
   border-radius: 18px; background: linear-gradient(180deg, #5b3fa8, #3f2a80); border: 1px solid rgba(255,255,255,0.25);
@@ -565,6 +568,7 @@ button.install-btn.show { display: block; }
 
     <button class="primary" id="helpClose">Let's play!</button>
     <p style="text-align:center; font-size:0.85rem; margin-top:6px"><a href="#" id="replayTips" style="color:#ffe27a">Replay the quick tips</a> &middot; <a href="privacy.html" style="color:#ffe27a">Privacy</a></p>
+    <p class="more-games">More from Puzzlewick Studios: <a href="https://bumpuzzled.com/" id="moreGames">Bumpuzzled</a>, a brain-teaser where every step is one-way.</p>
   </div>
 </div>
 
@@ -1678,6 +1682,7 @@ function endTips(skipped) {
 document.getElementById('coachNext').onclick = () => (tipIndex < TIPS.length - 1 ? showTip(tipIndex + 1) : endTips(false));
 document.getElementById('coachSkip').onclick = () => endTips(true);
 document.getElementById('replayTips').onclick = e => { e.preventDefault(); closeHelp(); startTips(); };
+document.getElementById('moreGames').onclick = () => track('more_games', {to: 'bumpuzzled'});
 window.addEventListener('resize', () => { if (coachOpen()) showTip(tipIndex); });
 
 // Install as an app. Android/desktop Chrome hand us a real install prompt (beforeinstallprompt);
