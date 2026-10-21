@@ -54,6 +54,16 @@
      events, so visitors who decline cookies or block Google are still counted. Same rules: real site
      only, and the privacy page's opt-out stops it too. -->
 <script>
+// Challenge links (?c=board&s=score&by=name): keep them for the game, then strip them from the address
+// before analytics loads, so a player's nickname never reaches Google or Umami
+let incomingChallenge = null;
+try {
+  const q = new URLSearchParams(location.search);
+  if (q.get('c')) {
+    incomingChallenge = {c: q.get('c'), s: q.get('s'), by: q.get('by')};
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
+} catch (e) {}
 window.dataLayer = window.dataLayer || [];
 function gtag() { dataLayer.push(arguments); }
 const GA_ID = 'G-FTF1MR21RP';
@@ -376,6 +386,14 @@ button.install-btn.show { display: block; }
 .install-steps { padding-left: 22px; }
 .install-steps li { margin: 8px 0; }
 .share-more { margin-top: 4px; font-size: 0.85rem; opacity: 0.95; }
+.over-buttons { flex-wrap: wrap; }
+.name-field { display: block; margin: 12px 0 2px; font-weight: 700; text-align: left; }
+.name-field input {
+  display: block; width: 100%; margin-top: 6px; padding: 10px 12px; font: inherit; font-weight: 600; color: white;
+  border-radius: 10px; border: 2px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12);
+}
+.name-field input::placeholder { color: rgba(255,255,255,0.55); }
+.challenge-note { min-height: 1.2em; margin-top: 6px; font-size: 0.85rem; color: #ffe27a; word-break: break-all; }
 .share-more a { color: #ffe27a; font-weight: 700; text-decoration: none; }
 .share-more a:hover { text-decoration: underline; }
 .share-icon { display: inline-block; vertical-align: -3px; width: 18px; height: 18px; }
@@ -457,6 +475,7 @@ button.install-btn.show { display: block; }
     <div class="new-high" id="streakLine"></div>
     <div class="detail" id="nextLine"></div>
     <div class="over-buttons">
+      <button class="btn-orange" id="challengeBtn">&#x2694;&#xFE0F; Challenge</button>
       <button class="btn-blue" id="shareBtn">Share</button>
       <button class="primary" id="againBtn">Play again</button>
     </div>
@@ -511,6 +530,18 @@ button.install-btn.show { display: block; }
     </div>
   </div>
 </div>
+<div class="help" id="challengeBox">
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="challengeTitle" style="text-align:center">
+    <h2 id="challengeTitle">Challenge a friend</h2>
+    <p>Send a link to this exact board. Your friend sees your score (never your words) and gets one go to beat it.</p>
+    <label class="name-field">Your nickname <input id="challengeName" maxlength="20" autocomplete="nickname" placeholder="e.g. WordWizard"></label>
+    <div class="over-buttons">
+      <button class="btn-blue" id="challengeCancel">Cancel</button>
+      <button class="btn-orange" id="challengeSend">Send challenge</button>
+    </div>
+    <p class="challenge-note" id="challengeNote"></p>
+  </div>
+</div>
 <div class="help" id="installHelp">
   <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="installTitle">
     <h2 id="installTitle">Install Kablamagram</h2>
@@ -551,6 +582,7 @@ button.install-btn.show { display: block; }
     <ul>
       <li><b>Daily puzzle</b>: everyone gets the same board each day, so you can compare scores with friends. One try per day, and your progress is saved if you leave. A new puzzle arrives at midnight; play on consecutive days to build a streak.</li>
       <li><b>Play more</b>: as many games as you like on random boards.</li>
+      <li><b>Challenge a friend</b>: after any game, tap <b>Challenge</b> to send a link to the same board with your score to beat. They see your score, never your words, and get one go.</li>
     </ul>
 
     <h3>Power tiles</h3>
@@ -597,6 +629,7 @@ for (const w of EXTRA_WORDS.split(' ')) WORDS.add(w);
 const MODES = {
   daily:    {label: 'Daily', moveLimit: 10, shuffles: 2},
   practice: {label: 'Play more', moveLimit: 10, shuffles: 2},
+  challenge: {label: 'Challenge', moveLimit: 10, shuffles: 2}, // a friend's board from a challenge link
 };
 
 // Daily puzzle number: days since launch by the player's own calendar date (#1 = 18 Oct 2026), so a
@@ -606,8 +639,10 @@ const DAILY_EPOCH = Date.UTC(2026, 9, 18);
 function dailyNumber(d = new Date()) {
   return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - DAILY_EPOCH) / 864e5) + 1;
 }
-let seeded = false, rngState = 0;
-function rng() { // mulberry32 while a daily is being played; ordinary randomness otherwise
+// Every game is seeded, so a challenge link can recreate its board (and every refill) exactly:
+// the daily from its puzzle number, Play more from a random seed saved with the game
+let seeded = false, rngState = 0, gameSeed = 0;
+function rng() { // mulberry32 from the game's seed; ordinary randomness for old unseeded saves
   if (!seeded) return Math.random();
   rngState = (rngState + 0x6D2B79F5) | 0;
   let t = rngState;
@@ -663,7 +698,9 @@ let grid = [], score = 0, moves = 0, busy = false, over = false;
 let path = [];      // [[r, c], ...] tiles the player has tapped, in order
 let wordsMade = []; // {word, pts}
 let moveLog = [];   // for the share message: {len, bomb} per word, 'swap' per swap
-let mode = store.mode === 'practice' ? 'practice' : 'daily';
+let mode = store.mode === 'practice' ? 'practice'
+  : store.mode === 'challenge' && store.challenge && !store.challenge.over ? 'challenge' : 'daily';
+let challenge = null; // {id, kind: daily|board, n, seed, by, target} while a challenge is being played
 let dailyNum = dailyNumber();
 let startHigh = 0;  // high score when this game began, to spot a new record at the end
 let shufflesLeft = Infinity;
@@ -674,6 +711,7 @@ function scoreKey() { return mode === 'daily' ? 'daily' : 'moves'; }
 // The high score shown: the daily's own best in the daily; in Play more, the best of any game (daily included)
 function shownHigh() {
   const h = store.highScores;
+  if (mode === 'challenge') return challenge.target;
   return mode === 'daily' ? h.daily || 0 : Math.max(h.moves || 0, h.daily || 0);
 }
 
@@ -686,7 +724,9 @@ let bannerText = '';
 const bannerEl = { get textContent() { return bannerText; }, set textContent(v) { bannerText = v; showWordLine(); } };
 function showWordLine() {
   const w = currentWord();
-  currentWordEl.textContent = w || bannerText || 'Tap letters to spell a word';
+  const vs = vsInfo();
+  const hint = vs && !moves && !over ? '⚔️ ' + vs.by + ' challenges you: beat ' + vs.target + '!' : 'Tap letters to spell a word';
+  currentWordEl.textContent = w || bannerText || hint;
   currentWordEl.classList.toggle('empty', !w);
   currentWordEl.classList.toggle('note', !w && !!bannerText);
 }
@@ -772,8 +812,8 @@ function refreshModeUi() {
   const done = store.daily && store.daily.n === dailyNumber() && store.daily.over;
   document.querySelector('#modeRow [data-mode="daily"]').textContent = 'Daily #' + dailyNumber() + (done ? ' ✓' : '');
   document.querySelectorAll('#modeRow button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-  document.getElementById('newBtn').style.display = mode === 'daily' ? 'none' : '';
-  document.getElementById('againBtn').textContent = mode === 'daily' ? 'Play more' : 'Play again';
+  document.getElementById('newBtn').style.display = mode === 'practice' ? '' : 'none'; // the daily and a challenge get one attempt
+  document.getElementById('againBtn').textContent = mode === 'practice' ? 'Play again' : 'Play more';
   const streak = currentStreak(), chip = document.getElementById('streakChip');
   chip.hidden = mode !== 'daily' || !streak;
   chip.textContent = '\u{1F525} ' + streak + '-day streak';
@@ -787,15 +827,18 @@ function currentStreak() {
 
 function newGame() {
   resetGame();
-  if (mode === 'daily') { dailyNum = dailyNumber(); seeded = true; rngState = seedFor(dailyNum); }
-  else seeded = false;
+  seeded = true;
+  if (mode === 'daily') { dailyNum = dailyNumber(); gameSeed = seedFor(dailyNum); }
+  else if (mode === 'challenge') gameSeed = challenge.seed;
+  else gameSeed = (Math.random() * 4294967296) | 0;
+  rngState = gameSeed;
   updateWordsPanel();
   grid = randomGrid();
   while (!newWordsOnBoard().length) grid = randomGrid();
   refreshModeUi();
   render();
   saveGame();
-  track('game_start', {mode, ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+  track('game_start', {mode, ...(mode === 'daily' ? {puzzle: dailyNum} : {}), ...(mode === 'challenge' ? {challenge: challenge.kind} : {})});
 }
 
 // Both games are saved after every move (and the moment new letters fall in), so closing the app
@@ -804,7 +847,8 @@ function newGame() {
 function saveGame() {
   const state = {grid, score, moves, wordsMade, moveLog, shufflesLeft, over, lastSwap};
   if (mode === 'daily') store.daily = {n: dailyNum, rngState, ...state};
-  else store.practice = state;
+  else if (mode === 'challenge') store.challenge = {...challenge, rngState, ...state};
+  else store.practice = {seed: gameSeed, rngState, ...state};
   saveStore();
 }
 function openDaily() {
@@ -828,13 +872,74 @@ function openPractice() {
   const p = store.practice;
   if (!p || !p.grid || p.over) { newGame(); return; }
   resetGame();
-  seeded = false;
   ({grid, score, moves, wordsMade, moveLog, shufflesLeft} = p);
+  gameSeed = p.seed || 0; seeded = !!p.seed; // games saved before seeds existed stay unseeded
+  if (seeded) rngState = p.rngState;
   lastSwap = p.lastSwap || null;
   updateWordsPanel();
   refreshModeUi();
   render();
   if (moves >= MODES[mode].moveLimit) endGame(); // closed during the last word's animation
+}
+
+// ---- Challenges: a link to a board with the sender's score to beat (no server: the link holds it all) ----
+// ?c=d12 is Daily #12's board, ?c=b1x9k2f a Play more board (its seed, base 36); s = score, by = name
+const cleanName = s => String(s || '').replace(/[^\p{L}\p{N} .'\-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+function parseChallenge(raw) {
+  if (!raw) return null;
+  const m = /^(?:d(\d{1,5})|b([0-9a-z]{1,7}))$/.exec(String(raw.c || '').toLowerCase());
+  const target = parseInt(raw.s, 10);
+  if (!m || !(target >= 0 && target < 100000)) return null;
+  const by = cleanName(raw.by) || 'A friend';
+  return m[1] ? {id: 'd' + m[1], kind: 'daily', n: +m[1], seed: seedFor(+m[1]), by, target}
+              : {id: 'b' + m[2], kind: 'board', seed: parseInt(m[2], 36) | 0, by, target};
+}
+// Someone opened a challenge link
+function startChallenge(ch) {
+  track('challenge_opened', {kind: ch.kind});
+  const today = dailyNumber();
+  if (ch.kind === 'daily' && ch.n === today) { // today's daily: play the real daily (one attempt) and compare
+    store.dailyVs = {n: ch.n, by: ch.by, target: ch.target}; saveStore();
+    openDaily(); return;
+  }
+  if (ch.kind === 'daily' && ch.n > today) { // their clock is a day behind: don't spoil tomorrow's daily
+    openDaily();
+    bannerEl.textContent = 'That challenge is for Daily #' + ch.n + ', which opens for you at midnight!';
+    return;
+  }
+  const saved = store.challenge;
+  if (saved && saved.id === ch.id) { openChallenge({...saved, by: ch.by, target: ch.target}); return; } // same board: no second go
+  if (saved && !saved.over && saved.moves) {
+    askConfirm('Start a new challenge?', "You're partway through " + saved.by + "'s challenge. Starting this one ends it.",
+      'New challenge', 'btn-orange', () => newChallenge(ch));
+    openChallenge(saved); return;
+  }
+  newChallenge(ch);
+}
+function newChallenge(ch) {
+  mode = 'challenge'; store.mode = 'challenge'; saveStore();
+  challenge = {id: ch.id, kind: ch.kind, n: ch.n, seed: ch.seed, by: ch.by, target: ch.target};
+  newGame();
+}
+function openChallenge(saved) {
+  mode = 'challenge'; store.mode = 'challenge'; saveStore();
+  challenge = {id: saved.id, kind: saved.kind, n: saved.n, seed: saved.seed, by: saved.by, target: saved.target};
+  resetGame();
+  ({grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState} = saved);
+  gameSeed = saved.seed; seeded = true;
+  lastSwap = saved.lastSwap || null;
+  over = !!saved.over;
+  updateWordsPanel();
+  refreshModeUi();
+  render();
+  if (over) showResult(false);
+  else if (moves >= MODES[mode].moveLimit) endGame();
+}
+// The challenge being played right now, if any (a challenge game, or today's daily opened from a link)
+function vsInfo() {
+  if (mode === 'challenge') return challenge;
+  const v = store.dailyVs;
+  return mode === 'daily' && v && v.n === dailyNum ? v : null;
 }
 function switchMode(m) { // both games are saved, so switching never loses anything
   if (busy || m === mode) return;
@@ -856,6 +961,8 @@ function endGame() {
   Sound.end(score > startHigh);
   track('game_over', {mode, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
     ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+  const vs = vsInfo();
+  if (vs) track('challenge_result', {kind: mode === 'daily' ? 'today' : vs.kind, result: score > vs.target ? 'won' : score === vs.target ? 'tied' : 'lost'});
 }
 
 // The results card over the board: score, record, best word; for the daily also the streak and when
@@ -864,10 +971,20 @@ function showResult(fresh) {
   const best = bestWord(), high = document.getElementById('highLine'), daily = mode === 'daily';
   const plural = (n, s) => n + ' ' + s + (n === 1 ? '' : 's');
   const swaps = moves - wordsMade.length;
-  document.getElementById('overTitle').textContent = daily ? 'Daily #' + dailyNum + ' done!' : 'Game over';
+  const vs = vsInfo();
+  document.getElementById('overTitle').textContent = daily ? 'Daily #' + dailyNum + ' done!'
+    : mode === 'challenge' ? (challenge.kind === 'daily' ? 'Daily #' + challenge.n + ' challenge done!' : 'Challenge done!') : 'Game over';
   document.getElementById('finalScore').textContent = score;
   if (fresh && score > startHigh) { high.textContent = daily ? 'Your best daily score!' : 'New high score!'; high.className = 'new-high'; }
   else { high.textContent = (daily ? 'Best daily: ' : 'High score: ') + Math.max(startHigh, score); high.className = 'detail'; }
+  if (vs) { // who won the challenge
+    high.textContent = score > vs.target ? '🏆 You beat ' + vs.by + '! ' + score + ' vs ' + vs.target
+      : score === vs.target ? 'A tie with ' + vs.by + ': ' + score + ' each'
+      : vs.by + ' wins: ' + vs.target + ' vs your ' + score;
+    high.className = score >= vs.target ? 'new-high' : 'detail';
+  }
+  document.getElementById('challengeBtn').textContent = vs ? '⚔️ Challenge back' : '⚔️ Challenge';
+  document.getElementById('challengeBtn').hidden = !challengeCode();
   document.getElementById('bestLine').textContent = best
     ? plural(wordsMade.length, 'word') + ', ' + plural(swaps, 'swap')
       + ' · best: ' + best.word.toUpperCase() + ' (+' + best.pts + ')'
@@ -900,7 +1017,8 @@ function shareText() {
   const best = bestWord();
   const keycap = n => n > 9 ? (n === 10 ? '\u{1F51F}' : '(' + n + ')') : n +'️⃣';
   const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A5}' : ''));
-  return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle' : 'Kablamagram \u{1F4A5} 10 moves') + '\n'
+  return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle'
+    : mode === 'challenge' ? 'Kablamagram \u2694\uFE0F challenge from ' + challenge.by : 'Kablamagram \u{1F4A5} 10 moves') + '\n'
     + score + ' points' + (best ? ' · best word: ' + best.word.length + ' letters, +' + best.pts : '') + '\n'
     + (line.length ? 'My ' + line.length + ' moves: ' + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n' : '')
     + 'Can you beat it? ' + SHARE_URL;
@@ -985,7 +1103,7 @@ function makeShareCanvas(newHigh) {
   // logo and mode
   drawLogo(ctx, W / 2, 136, 150);
   spacing(3); ctx.font = font(700, 40); ctx.fillStyle = '#e4dcff';
-  ctx.fillText(mode === 'daily' ? 'DAILY PUZZLE #' + dailyNum : '10 MOVES', W / 2, 272);
+  ctx.fillText(mode === 'daily' ? 'DAILY PUZZLE #' + dailyNum : mode === 'challenge' ? 'CHALLENGE' : '10 MOVES', W / 2, 272);
   // score
   spacing(0); ctx.font = font(900, 190); ctx.fillStyle = 'rgba(40,20,80,0.4)'; ctx.fillText(String(score), W / 2, 432);
   ctx.fillStyle = '#fff'; ctx.fillText(String(score), W / 2, 424);
@@ -1116,8 +1234,9 @@ function renderStats() {
   shownScore = score;
   document.getElementById('progressLabel').textContent = 'Moves';
   document.getElementById('progress').textContent = moves + ' / ' + m.moveLimit;
-  document.getElementById('highLabel').textContent = mode === 'daily' ? 'Best daily' : 'High';
-  document.getElementById('high').textContent = shownHigh();
+  const vs = vsInfo();
+  document.getElementById('highLabel').textContent = vs ? 'To beat' : mode === 'daily' ? 'Best daily' : 'High';
+  document.getElementById('high').textContent = vs ? vs.target : shownHigh();
   const lw = store.longestWord;
   document.getElementById('records').textContent = lw
     ? 'Longest word ever: ' + lw.word.toUpperCase() + ' (' + lw.word.length + ' letters, ' + new Date(lw.date).toLocaleDateString() + ')'
@@ -1562,8 +1681,42 @@ function shuffleBoard() {
   render();
   saveGame();
 }
-document.getElementById('againBtn').onclick = () => (mode === 'daily' ? switchMode('practice') : newGame());
+document.getElementById('againBtn').onclick = () => (mode === 'practice' ? newGame() : switchMode('practice'));
 document.getElementById('shareBtn').onclick = shareResult;
+
+// Challenge button: your nickname (remembered on this device), then the phone's share sheet or a copied link
+function challengeCode() {
+  if (mode === 'daily') return 'd' + dailyNum;
+  if (mode === 'challenge') return challenge.id;
+  return gameSeed ? 'b' + (gameSeed >>> 0).toString(36) : null; // a game saved before seeds existed can't be shared
+}
+const challengeBox = document.getElementById('challengeBox'), challengeName = document.getElementById('challengeName');
+const challengeNote = document.getElementById('challengeNote');
+document.getElementById('challengeBtn').onclick = () => {
+  challengeName.value = store.playerName || '';
+  challengeNote.textContent = '';
+  challengeBox.classList.add('show');
+  setTimeout(() => challengeName.focus(), 50);
+};
+document.getElementById('challengeCancel').onclick = closeHelp;
+challengeBox.onclick = e => { if (e.target === challengeBox) closeHelp(); };
+document.getElementById('challengeSend').onclick = async () => {
+  const name = cleanName(challengeName.value);
+  if (!name) { challengeNote.textContent = 'Add a nickname so your friend knows who challenged them.'; challengeName.focus(); return; }
+  store.playerName = name; saveStore();
+  const vs = vsInfo();
+  const url = SHARE_URL + '/?c=' + challengeCode() + '&s=' + score + '&by=' + encodeURIComponent(name);
+  const text = vs ? 'I scored ' + score + ' on ' + vs.by + "'s Kablamagram challenge. Your turn: can you beat me?"
+    : mode === 'daily' ? 'I scored ' + score + ' on Kablamagram Daily #' + dailyNum + '. Can you beat me on the same board?'
+    : 'I scored ' + score + ' on this Kablamagram board. Can you beat me?';
+  const kind = vs ? 'rematch' : mode === 'daily' ? 'daily' : 'board';
+  if (navigator.share) {
+    try { await navigator.share({title: 'Kablamagram challenge', text, url}); closeHelp(); track('challenge_created', {kind, method: 'share'}); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(text + ' ' + url); challengeNote.textContent = 'Challenge link copied! Paste it to a friend.'; track('challenge_created', {kind, method: 'copy'}); }
+  catch (e) { challengeNote.textContent = url; } // no clipboard: show the link to copy by hand
+};
 document.getElementById('fbShareBtn').onclick = shareToFacebook;
 document.getElementById('saveImgBtn').onclick = saveResultImage;
 document.getElementById('copyTextBtn').onclick = copyResultText;
@@ -1736,6 +1889,11 @@ document.addEventListener('keydown', e => {
     else if (e.key === 'Escape') endTips(true);
     return;
   }
+  if (document.getElementById('challengeBox').classList.contains('show')) { // typing a name: Enter sends
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('challengeSend').click(); }
+    else if (e.key === 'Escape') closeHelp();
+    return;
+  }
   if (helpOpen()) { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeHelp(); } return; }
   if (e.key === 'Enter') { e.preventDefault(); submitWord(); }
   else if (e.key === 'Backspace') { e.preventDefault(); undo(); }
@@ -1745,7 +1903,10 @@ document.addEventListener('keydown', e => {
 // Start where they left off: today's daily or their Play more game, carrying on if it's in progress
 // ...but today's daily comes first: until it's finished, the game always opens on it
 const dailyDoneToday = () => !!(store.daily && store.daily.n === dailyNumber() && store.daily.over);
-if (mode === 'daily' || !dailyDoneToday()) openDaily(); else openPractice();
+const linkedChallenge = parseChallenge(incomingChallenge);
+if (linkedChallenge) startChallenge(linkedChallenge); // a challenge link comes first
+else if (mode === 'challenge') openChallenge(store.challenge); // carrying on with one
+else if (mode === 'daily' || !dailyDoneToday()) openDaily(); else openPractice();
 // safety net when the app goes into the background (not mid-animation, when a word is half-applied)
 document.addEventListener('visibilitychange', () => { if (document.hidden && !busy) saveGame(); });
 fitToScreen();
