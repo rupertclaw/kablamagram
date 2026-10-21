@@ -214,10 +214,9 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
 .game-over h2 { font-size: 1.2rem; }
 .game-over .final { font-size: 2.2rem; font-weight: bold; line-height: 1.15; }
 .over-line { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 10px; }
-/* the leaderboard button on its own row, then Challenge, Share and Play again side by side */
+/* two rows on a phone: Leaderboard and Share, then Challenge a friend and Play again */
 .game-over .over-buttons { gap: 0 6px; }
 .game-over .over-buttons button { margin: 6px 0 4px; padding: 9px 11px; font-size: 0.9rem; }
-.game-over #boardLine { flex-basis: 100%; max-width: 230px; }
 .game-over .share-more { font-size: 0.8rem; }
 .game-over .new-high { color: #f1c40f; font-weight: bold; }
 .game-over .detail { font-size: 0.85rem; opacity: 0.85; }
@@ -467,8 +466,8 @@ button.install-btn.show { display: block; }
     <div class="detail" id="nextLine"></div>
     <div class="over-buttons">
       <button class="btn-yellow" id="boardLine" hidden>&#x1F3C6; Leaderboard</button>
-      <button class="btn-orange" id="challengeBtn">&#x2694;&#xFE0F; Challenge</button>
       <button class="btn-blue" id="shareBtn">Share</button>
+      <button class="btn-orange" id="challengeBtn">&#x2694;&#xFE0F; Challenge a friend</button>
       <button class="primary" id="againBtn">Play again</button>
     </div>
     <div class="share-more">
@@ -999,7 +998,7 @@ function showResult(fresh) {
       : vs.by + ' wins: ' + vs.target + ' vs your ' + score;
     high.className = score >= vs.target ? 'new-high' : 'detail';
   }
-  document.getElementById('challengeBtn').textContent = vs ? '⚔️ Challenge back' : '⚔️ Challenge';
+  document.getElementById('challengeBtn').textContent = vs ? '⚔️ Challenge back' : '⚔️ Challenge a friend';
   document.getElementById('challengeBtn').hidden = !challengeCode();
   refreshBoardLine();
   document.getElementById('bestLine').textContent = best
