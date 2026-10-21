@@ -403,6 +403,7 @@ button.install-btn.show { display: block; }
 .board-list .rank { width: 2.2em; opacity: 0.8; font-variant-numeric: tabular-nums; }
 .board-list .nick { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-list .pts { font-variant-numeric: tabular-nums; }
+.board-remove { display: inline-block; margin-top: 8px; font-size: 0.8rem; color: rgba(255,255,255,0.75); }
 .challenge-note { min-height: 1.2em; margin-top: 6px; font-size: 0.85rem; color: #ffe27a; word-break: break-all; }
 .share-more a { color: #ffe27a; font-weight: 700; text-decoration: none; }
 .share-more a:hover { text-decoration: underline; }
@@ -568,6 +569,7 @@ button.install-btn.show { display: block; }
     <ol class="board-list" id="boardList"></ol>
     <p class="challenge-note" id="boardNote"></p>
     <div class="over-buttons"><button class="primary" id="boardClose">Close</button></div>
+    <a href="#" class="board-remove" id="boardRemove" hidden>Remove me from the leaderboard</a>
   </div>
 </div>
 <div class="help" id="installHelp">
@@ -1793,6 +1795,7 @@ async function openBoard() {
   document.getElementById('boardNote').textContent = '';
   const join = document.getElementById('boardJoin');
   join.hidden = store.leaderboard === 'on' || !finishedDaily();
+  document.getElementById('boardRemove').hidden = store.leaderboard !== 'on';
   document.getElementById('boardName').value = store.playerName || '';
   document.getElementById('boardYou').textContent = 'Loading\u2026';
   document.getElementById('boardList').innerHTML = '';
@@ -1806,6 +1809,26 @@ async function openBoard() {
 document.getElementById('boardLine').onclick = e => { e.preventDefault(); openBoard(); };
 document.getElementById('boardClose').onclick = closeHelp;
 document.getElementById('boardBox').onclick = e => { if (e.target.id === 'boardBox') closeHelp(); };
+// "Remove me": deletes all of this device's entries (every day) and stops posting; joining again is allowed
+document.getElementById('boardRemove').onclick = e => {
+  e.preventDefault();
+  askConfirm('Remove you from the leaderboard?', "This deletes your nickname and scores from every day's leaderboard, and stops adding new ones. You can join again any time.",
+    'Remove me', 'btn-orange', async () => {
+      const note = document.getElementById('boardNote');
+      try {
+        const r = await fetch(LEADERBOARD_URL + '/mine?device=' + deviceId(), {method: 'DELETE'});
+        if (!r.ok) throw new Error('failed');
+      } catch (err) { note.textContent = "Couldn't reach the leaderboard to remove you. Please try again."; return; }
+      store.leaderboard = 'off'; delete store.boardPosted; saveStore();
+      boardCache = null;
+      track('leaderboard_remove');
+      document.getElementById('boardRemove').hidden = true;
+      document.getElementById('boardJoin').hidden = !finishedDaily();
+      note.textContent = "You've been removed from the leaderboard.";
+      renderBoard(await fetchBoard());
+      refreshBoardLine();
+    });
+};
 document.getElementById('boardNotNow').onclick = () => {
   store.leaderboard = 'off'; saveStore();
   document.getElementById('boardJoin').hidden = true; refreshBoardLine();
@@ -1823,6 +1846,7 @@ document.getElementById('boardJoinBtn').onclick = async () => {
   }
   track('leaderboard_join');
   document.getElementById('boardJoin').hidden = true;
+  document.getElementById('boardRemove').hidden = false;
   renderBoard(r); refreshBoardLine();
 };
 challengeBox.onclick = e => { if (e.target === challengeBox) closeHelp(); };
