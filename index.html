@@ -393,6 +393,16 @@ button.install-btn.show { display: block; }
   border-radius: 10px; border: 2px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12);
 }
 .name-field input::placeholder { color: rgba(255,255,255,0.55); }
+.board-line { display: inline-block; margin-top: 6px; font-weight: 800; color: #ffe27a; text-decoration: none; }
+.board-line:hover { text-decoration: underline; }
+.board-you { font-weight: 800; color: #ffe27a; min-height: 1.2em; margin-top: 4px; }
+.board-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 46vh; max-height: 46svh; overflow-y: auto; text-align: left; }
+.board-list li { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 8px; font-weight: 700; }
+.board-list li:nth-child(odd) { background: rgba(255,255,255,0.07); }
+.board-list li.me { background: rgba(255,226,122,0.25); color: #ffe27a; }
+.board-list .rank { width: 2.2em; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.board-list .nick { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .pts { font-variant-numeric: tabular-nums; }
 .challenge-note { min-height: 1.2em; margin-top: 6px; font-size: 0.85rem; color: #ffe27a; word-break: break-all; }
 .share-more a { color: #ffe27a; font-weight: 700; text-decoration: none; }
 .share-more a:hover { text-decoration: underline; }
@@ -474,6 +484,7 @@ button.install-btn.show { display: block; }
     <div class="detail" id="bestLine"></div>
     <div class="new-high" id="streakLine"></div>
     <div class="detail" id="nextLine"></div>
+    <a href="#" class="board-line" id="boardLine" hidden>&#x1F3C6; Today's leaderboard</a>
     <div class="over-buttons">
       <button class="btn-orange" id="challengeBtn">&#x2694;&#xFE0F; Challenge</button>
       <button class="btn-blue" id="shareBtn">Share</button>
@@ -542,6 +553,23 @@ button.install-btn.show { display: block; }
     <p class="challenge-note" id="challengeNote"></p>
   </div>
 </div>
+<div class="help" id="boardBox">
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="boardTitle" style="text-align:center">
+    <h2 id="boardTitle">Today's leaderboard</h2>
+    <div id="boardJoin" hidden>
+      <p>Put your daily score on the leaderboard under a nickname. Only your nickname and score are shown.</p>
+      <label class="name-field">Your nickname <input id="boardName" maxlength="20" autocomplete="nickname" placeholder="e.g. WordWizard"></label>
+      <div class="over-buttons">
+        <button class="btn-blue" id="boardNotNow">Not now</button>
+        <button class="btn-orange" id="boardJoinBtn">Join</button>
+      </div>
+    </div>
+    <p class="board-you" id="boardYou"></p>
+    <ol class="board-list" id="boardList"></ol>
+    <p class="challenge-note" id="boardNote"></p>
+    <div class="over-buttons"><button class="primary" id="boardClose">Close</button></div>
+  </div>
+</div>
 <div class="help" id="installHelp">
   <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="installTitle">
     <h2 id="installTitle">Install Kablamagram</h2>
@@ -582,6 +610,7 @@ button.install-btn.show { display: block; }
     <ul>
       <li><b>Daily puzzle</b>: everyone gets the same board each day, so you can compare scores with friends. One try per day, and your progress is saved if you leave. A new puzzle arrives at midnight; play on consecutive days to build a streak.</li>
       <li><b>Play more</b>: as many games as you like on random boards.</li>
+      <li><b>Daily leaderboard</b>: after the daily, see how you rank against everyone today. Joining is optional and only needs a nickname.</li>
       <li><b>Challenge a friend</b>: after any game, tap <b>Challenge</b> to send a link to the same board with your score to beat. They see your score, never your words, and get one go.</li>
     </ul>
 
@@ -961,6 +990,7 @@ function endGame() {
   Sound.end(score > startHigh);
   track('game_over', {mode, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
     ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+  if (mode === 'daily' && store.leaderboard === 'on') postDailyScore().then(refreshBoardLine);
   const vs = vsInfo();
   if (vs) track('challenge_result', {kind: mode === 'daily' ? 'today' : vs.kind, result: score > vs.target ? 'won' : score === vs.target ? 'tied' : 'lost'});
 }
@@ -985,6 +1015,7 @@ function showResult(fresh) {
   }
   document.getElementById('challengeBtn').textContent = vs ? '⚔️ Challenge back' : '⚔️ Challenge';
   document.getElementById('challengeBtn').hidden = !challengeCode();
+  refreshBoardLine();
   document.getElementById('bestLine').textContent = best
     ? plural(wordsMade.length, 'word') + ', ' + plural(swaps, 'swap')
       + ' · best: ' + best.word.toUpperCase() + ' (+' + best.pts + ')'
@@ -1699,6 +1730,101 @@ document.getElementById('challengeBtn').onclick = () => {
   setTimeout(() => challengeName.focus(), 50);
 };
 document.getElementById('challengeCancel').onclick = closeHelp;
+
+// ---- Daily leaderboard (optional, nickname only): a small Cloudflare Worker keeps today's scores ----
+const LEADERBOARD_URL = 'https://kablamagram-leaderboard.kablamagram-leaderboard.workers.dev';
+let boardCache = null; // last answer from the leaderboard: {day, total, top, you}
+function deviceId() { // random, made once on this device; lets the leaderboard keep one score per player per day
+  if (!/^[a-z0-9]{16,40}$/.test(store.deviceId || '')) {
+    const bytes = crypto.getRandomValues(new Uint8Array(12));
+    store.deviceId = [...bytes].map(b => b.toString(36).padStart(2, '0')).join('');
+    saveStore();
+  }
+  return store.deviceId;
+}
+// today's finished daily, or null
+const finishedDaily = () => (store.daily && store.daily.over && store.daily.n === dailyNumber() ? store.daily : null);
+async function postDailyScore(typed) { // typed: the nickname exactly as entered, for the swear-word check
+  const d = finishedDaily();
+  if (!d || !store.playerName) return null;
+  try {
+    const r = await fetch(LEADERBOARD_URL + '/score', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({day: d.n, device: deviceId(), nick: store.playerName, score: d.score, typed: typed || store.playerName})});
+    const data = await r.json();
+    if (!r.ok) return {error: data.error || 'error'};
+    boardCache = data;
+    if (store.boardPosted !== d.n) { store.boardPosted = d.n; saveStore(); track('leaderboard_post', {puzzle: d.n}); }
+    return data;
+  } catch (e) { return {error: 'offline'}; }
+}
+async function fetchBoard() {
+  try {
+    const r = await fetch(LEADERBOARD_URL + '/board?day=' + dailyNumber() + '&device=' + deviceId());
+    if (!r.ok) return null;
+    return (boardCache = await r.json());
+  } catch (e) { return null; }
+}
+// the results card's line: "Today's leaderboard", or your rank once you're on it
+function refreshBoardLine() {
+  const line = document.getElementById('boardLine');
+  line.hidden = !(mode === 'daily' && over);
+  if (line.hidden) return;
+  const b = boardCache && boardCache.day === dailyNumber() ? boardCache : null;
+  line.textContent = b && b.you ? '\u{1F3C6} You\'re #' + b.you.rank + ' of ' + b.total + ' today \u00B7 see leaderboard'
+    : store.leaderboard === 'on' ? '\u{1F3C6} Today\'s leaderboard' : '\u{1F3C6} Join today\'s leaderboard';
+}
+function renderBoard(b) {
+  const list = document.getElementById('boardList'), you = document.getElementById('boardYou');
+  list.innerHTML = '';
+  if (!b) { you.textContent = ''; document.getElementById('boardNote').textContent = "Couldn't reach the leaderboard. Check your connection and try again."; return; }
+  for (const row of b.top) {
+    const li = document.createElement('li');
+    if (b.you && row.nick === b.you.nick && row.score === b.you.score) li.className = 'me';
+    for (const [cls, text] of [['rank', '#' + row.rank], ['nick', row.nick], ['pts', row.score]]) {
+      const s = document.createElement('span'); s.className = cls; s.textContent = text; li.appendChild(s);
+    }
+    list.appendChild(li);
+  }
+  you.textContent = b.you ? "You're #" + b.you.rank + ' of ' + b.total + (b.total === 1 ? ' player' : ' players') + ' today'
+    : b.total ? b.total + (b.total === 1 ? ' player' : ' players') + ' so far today' : 'No scores yet today. Be the first!';
+}
+async function openBoard() {
+  document.getElementById('boardTitle').textContent = 'Daily #' + dailyNumber() + ' leaderboard';
+  document.getElementById('boardNote').textContent = '';
+  const join = document.getElementById('boardJoin');
+  join.hidden = store.leaderboard === 'on' || !finishedDaily();
+  document.getElementById('boardName').value = store.playerName || '';
+  document.getElementById('boardYou').textContent = 'Loading\u2026';
+  document.getElementById('boardList').innerHTML = '';
+  document.getElementById('boardBox').classList.add('show');
+  track('leaderboard_view');
+  let b = null;
+  if (store.leaderboard === 'on' && finishedDaily() && store.boardPosted !== dailyNumber()) { const r = await postDailyScore(); b = r && !r.error ? r : null; }
+  renderBoard(b || await fetchBoard());
+  refreshBoardLine();
+}
+document.getElementById('boardLine').onclick = e => { e.preventDefault(); openBoard(); };
+document.getElementById('boardClose').onclick = closeHelp;
+document.getElementById('boardBox').onclick = e => { if (e.target.id === 'boardBox') closeHelp(); };
+document.getElementById('boardNotNow').onclick = () => {
+  store.leaderboard = 'off'; saveStore();
+  document.getElementById('boardJoin').hidden = true; refreshBoardLine();
+};
+document.getElementById('boardJoinBtn').onclick = async () => {
+  const note = document.getElementById('boardNote'), typed = document.getElementById('boardName').value, name = cleanName(typed);
+  if (name.length < 2) { note.textContent = 'Pick a nickname of at least 2 letters.'; return; }
+  store.playerName = name; store.leaderboard = 'on'; saveStore();
+  note.textContent = '';
+  const r = await postDailyScore(typed);
+  if (!r || r.error) {
+    if (r && r.error && r.error !== 'offline') { store.leaderboard = undefined; saveStore(); note.textContent = r.error.charAt(0).toUpperCase() + r.error.slice(1) + '.'; return; }
+    note.textContent = "Couldn't reach the leaderboard. Your score will be added next time you open it.";
+    return;
+  }
+  track('leaderboard_join');
+  document.getElementById('boardJoin').hidden = true;
+  renderBoard(r); refreshBoardLine();
+};
 challengeBox.onclick = e => { if (e.target === challengeBox) closeHelp(); };
 document.getElementById('challengeSend').onclick = async () => {
   const name = cleanName(challengeName.value);
@@ -1887,6 +2013,11 @@ document.addEventListener('keydown', e => {
   if (coachOpen()) {
     if (e.key === 'Enter') { e.preventDefault(); document.getElementById('coachNext').click(); }
     else if (e.key === 'Escape') endTips(true);
+    return;
+  }
+  if (document.getElementById('boardBox').classList.contains('show')) {
+    if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'boardName') { e.preventDefault(); document.getElementById('boardJoinBtn').click(); }
+    else if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeHelp(); }
     return;
   }
   if (document.getElementById('challengeBox').classList.contains('show')) { // typing a name: Enter sends
