@@ -786,8 +786,19 @@ const Sound = (() => {
   };
 })();
 
+// Every word and every swap is a move. The first move of a game is what counts as "starting" it
+// (just opening the site sets today's board up, which isn't playing it).
+let startTracked = false;
+function countMove() {
+  moves++;
+  if (!startTracked) {
+    startTracked = true;
+    track('game_start', {mode, ...(mode === 'daily' ? {puzzle: dailyNum} : {}), ...(mode === 'challenge' ? {challenge: challenge.kind} : {})});
+  }
+}
+
 function resetGame() {
-  score = 0; moves = 0; path = []; busy = false; over = false;
+  score = 0; moves = 0; path = []; busy = false; over = false; startTracked = false;
   wordsMade = []; moveLog = []; lastSwap = null;
   shufflesLeft = MODES[mode].shuffles;
   startHigh = shownHigh();
@@ -826,7 +837,6 @@ function newGame() {
   refreshModeUi();
   render();
   saveGame();
-  track('game_start', {mode, ...(mode === 'daily' ? {puzzle: dailyNum} : {}), ...(mode === 'challenge' ? {challenge: challenge.kind} : {})});
 }
 
 // Both games are saved after every move (and the moment new letters fall in), so closing the app
@@ -848,6 +858,7 @@ function openDaily() {
   ({grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState} = d);
   lastSwap = d.lastSwap || null;
   over = !!d.over; // before drawing, so a finished daily's buttons show greyed out
+  startTracked = moves > 0; // counted when it began
   updateWordsPanel();
   refreshModeUi();
   render();
@@ -862,6 +873,7 @@ function openPractice() {
   resetGame();
   ({grid, score, moves, wordsMade, moveLog, shufflesLeft} = p);
   gameSeed = p.seed || 0; seeded = !!p.seed; // games saved before seeds existed stay unseeded
+  startTracked = moves > 0;
   if (seeded) rngState = p.rngState;
   lastSwap = p.lastSwap || null;
   updateWordsPanel();
@@ -917,6 +929,7 @@ function openChallenge(saved) {
   gameSeed = saved.seed; seeded = true;
   lastSwap = saved.lastSwap || null;
   over = !!saved.over;
+  startTracked = moves > 0;
   updateWordsPanel();
   refreshModeUi();
   render();
@@ -1345,7 +1358,7 @@ async function swapTiles(r1, c1, r2, c2) {
   const limit = MODES[mode].moveLimit;
   if (limit && moves === limit - 1) { feedback('Last move: spell a word!', 'bad'); return; }
   [grid[r1][c1], grid[r2][c2]] = [grid[r2][c2], grid[r1][c1]];
-  moves++;
+  countMove();
   moveLog.push('swap');
   lastSwap = [r1, c1, r2, c2]; // Undo can take this back until a word is played or the board is shuffled
   Sound.swap();
@@ -1465,7 +1478,7 @@ async function submitWord() {
   const pts = size * size * mult + blast.length * BLAST_PTS;
   const earned = POWER_FOR_LENGTH[Math.min(word.length, 10)]; // 10 letters or more: x3
   score += pts;
-  moves++;
+  countMove();
   wordsMade.push({word, pts});
   moveLog.push({len: word.length, bomb: blast.length > 0});
   lastSwap = null; // a played word is final (undoing it would reveal the letters that fall in)
