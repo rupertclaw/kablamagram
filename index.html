@@ -149,9 +149,14 @@ button.words-btn:active { transform: none; box-shadow: inset 0 0 0 1px rgba(255,
 .mode-row button { margin: 0; padding: 6px 12px; font-size: 0.8rem; background: transparent; box-shadow: none; text-shadow: none; }
 .mode-row button.active { background: white; color: #764ba2; font-weight: bold; box-shadow: 0 2px 0 rgba(30,15,70,0.35); }
 .game-over {
-  position: absolute; inset: 0; border-radius: 16px; background: rgba(30,20,60,0.92); display: none;
-  flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 14px 12px;
-  overflow-y: auto; /* small phones: the card scrolls inside the board, the page never does */
+  /* as wide as the screen allows (on short phones the board shrinks, the card needn't) */
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: min(340px, calc(100vw - 16px));
+  min-height: 100%; z-index: 5;
+  border-radius: 16px; background: rgba(30,20,60,0.96); display: none;
+  flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 12px 12px;
+  /* on small phones it grows down over the greyed-out buttons below the board (fitResultCard),
+     and only scrolls if even that isn't enough */
+  overflow-y: auto;
 }
 .game-over > :first-child { margin-top: auto; } /* centred when it fits, top-aligned when it scrolls */
 .game-over > :last-child { margin-bottom: auto; }
@@ -206,8 +211,14 @@ button.words-btn:active { transform: none; box-shadow: inset 0 0 0 1px rgba(255,
 button.coach-skip { background: none; box-shadow: none; text-shadow: none; padding: 8px 4px; font-weight: 600; opacity: 0.75; }
 .over-words { font-size: 0.78rem; line-height: 1.5; opacity: 0.9; margin-top: 4px; }
 .over-words b { color: #ffe27a; font-weight: 700; }
-.game-over h2 { font-size: 1.3rem; }
-.game-over .final { font-size: 2.4rem; font-weight: bold; }
+.game-over h2 { font-size: 1.2rem; }
+.game-over .final { font-size: 2.2rem; font-weight: bold; line-height: 1.15; }
+.over-line { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 10px; }
+/* the leaderboard button on its own row, then Challenge, Share and Play again side by side */
+.game-over .over-buttons { gap: 0 6px; }
+.game-over .over-buttons button { margin: 6px 0 4px; padding: 9px 11px; font-size: 0.9rem; }
+.game-over #boardLine { flex-basis: 100%; max-width: 230px; }
+.game-over .share-more { font-size: 0.8rem; }
 .game-over .new-high { color: #f1c40f; font-weight: bold; }
 .game-over .detail { font-size: 0.85rem; opacity: 0.85; }
 .board {
@@ -359,8 +370,6 @@ button.install-btn.show { display: block; }
   border-radius: 10px; border: 2px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12);
 }
 .name-field input::placeholder { color: rgba(255,255,255,0.55); }
-.board-line { display: inline-block; margin-top: 6px; font-weight: 800; color: #ffe27a; text-decoration: none; }
-.board-line:hover { text-decoration: underline; }
 .board-you { font-weight: 800; color: #ffe27a; min-height: 1.2em; margin-top: 4px; }
 .board-list { list-style: none; margin: 6px 0 0; padding: 0; max-height: 46vh; max-height: 46svh; overflow-y: auto; text-align: left; }
 .board-list li { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 8px; font-weight: 700; }
@@ -412,6 +421,12 @@ button.install-btn.show { display: block; }
   .word-row button, .reset-row button { padding: 8px 14px; margin: 3px 3px 6px; font-size: 0.95rem; }
   .word-row button.primary { padding: 8px 22px; }
 }
+/* very short screens: the results card drops its least useful line so it still fits */
+@media (max-height: 600px) {
+  .game-over { padding: 8px 12px; }
+  .game-over .final { font-size: 1.9rem; }
+  .game-over #records { display: none; }
+}
 </style>
 </head>
 <body>
@@ -447,12 +462,11 @@ button.install-btn.show { display: block; }
   <div class="game-over" id="gameOver">
     <h2 id="overTitle">Game over</h2>
     <div class="final" id="finalScore">0</div>
-    <div id="highLine"></div>
+    <div class="over-line"><span id="highLine"></span><span class="new-high" id="streakLine"></span></div>
     <div class="detail" id="bestLine"></div>
-    <div class="new-high" id="streakLine"></div>
     <div class="detail" id="nextLine"></div>
-    <a href="#" class="board-line" id="boardLine" hidden>&#x1F3C6; Today's leaderboard</a>
     <div class="over-buttons">
+      <button class="btn-yellow" id="boardLine" hidden>&#x1F3C6; Leaderboard</button>
       <button class="btn-orange" id="challengeBtn">&#x2694;&#xFE0F; Challenge</button>
       <button class="btn-blue" id="shareBtn">Share</button>
       <button class="primary" id="againBtn">Play again</button>
@@ -998,7 +1012,18 @@ function showResult(fresh) {
   document.getElementById('shareNote').textContent = '';
   prepareShareFile(fresh && score > startHigh);
   document.getElementById('gameOver').classList.add('show');
+  fitResultCard();
 }
+
+// The results card covers the board, and on small phones grows down over the greyed-out buttons
+// below it (to the bottom of the screen) so nothing on it needs scrolling
+function fitResultCard() {
+  const card = document.getElementById('gameOver');
+  if (!card.classList.contains('show')) return;
+  const room = window.innerHeight - card.getBoundingClientRect().top - 8;
+  card.style.maxHeight = Math.max(card.parentElement.clientHeight, room) + 'px';
+}
+window.addEventListener('resize', fitResultCard);
 
 // "Next puzzle in 5h 12m"; when midnight passes, today's new puzzle opens by itself
 function updateCountdown() {
@@ -1736,14 +1761,14 @@ async function fetchBoard() {
     return (boardCache = await r.json());
   } catch (e) { return null; }
 }
-// the results card's line: "Today's leaderboard", or your rank once you're on it
+// the results card's leaderboard button: "Join leaderboard", or your rank once you're on it
 function refreshBoardLine() {
   const line = document.getElementById('boardLine');
   line.hidden = !(mode === 'daily' && over);
   if (line.hidden) return;
   const b = boardCache && boardCache.day === dailyNumber() ? boardCache : null;
-  line.textContent = b && b.you ? '\u{1F3C6} You\'re #' + b.you.rank + ' of ' + b.total + ' today \u00B7 see leaderboard'
-    : store.leaderboard === 'on' ? '\u{1F3C6} Today\'s leaderboard' : '\u{1F3C6} Join today\'s leaderboard';
+  line.textContent = b && b.you ? '\u{1F3C6} You\'re #' + b.you.rank + ' of ' + b.total
+    : store.leaderboard === 'on' ? '\u{1F3C6} Leaderboard' : '\u{1F3C6} Join leaderboard';
 }
 function renderBoard(b) {
   const list = document.getElementById('boardList'), you = document.getElementById('boardYou');
@@ -1776,7 +1801,7 @@ async function openBoard() {
   renderBoard(b || await fetchBoard());
   refreshBoardLine();
 }
-document.getElementById('boardLine').onclick = e => { e.preventDefault(); openBoard(); };
+document.getElementById('boardLine').onclick = openBoard;
 document.getElementById('boardClose').onclick = closeHelp;
 document.getElementById('boardBox').onclick = e => { if (e.target.id === 'boardBox') closeHelp(); };
 // "Remove me": deletes all of this device's entries (every day) and stops posting; joining again is allowed
