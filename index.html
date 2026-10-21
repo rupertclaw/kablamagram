@@ -1545,7 +1545,14 @@ function clearWord() { if (!busy && !over && path.length) { path = []; Sound.unt
 document.getElementById('undoBtn').onclick = undo;
 document.getElementById('clearBtn').onclick = clearWord;
 submitBtn.onclick = submitWord;
+// Shuffle sits right below Submit, so it asks first (players hit it by mistake)
 document.getElementById('shuffleBtn').onclick = () => {
+  if (busy || over || shufflesLeft <= 0) return;
+  const left = shufflesLeft === Infinity ? '' : shufflesLeft === 1 ? " It's your last shuffle this game." : ' It uses 1 of your ' + shufflesLeft + ' shuffles left.';
+  askConfirm('Shuffle the board?', 'Every tile moves to a new spot.' + left + (path.length ? ' Your current word will be cleared.' : ''),
+    'Shuffle', 'btn-teal', shuffleBoard);
+};
+function shuffleBoard() {
   if (busy || over || shufflesLeft <= 0) return;
   shufflesLeft--;
   lastSwap = null;
@@ -1554,7 +1561,7 @@ document.getElementById('shuffleBtn').onclick = () => {
   Sound.shuffle();
   render();
   saveGame();
-};
+}
 document.getElementById('againBtn').onclick = () => (mode === 'daily' ? switchMode('practice') : newGame());
 document.getElementById('shareBtn').onclick = shareResult;
 document.getElementById('fbShareBtn').onclick = shareToFacebook;
@@ -1606,13 +1613,20 @@ showSoundState();
 // Esc, Enter or a tap outside the box all keep the game.
 const confirmBox = document.getElementById('confirmBox');
 let confirmAction = null;
+function askConfirm(title, msg, yesLabel, yesClass, action) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent = msg;
+  const yes = document.getElementById('confirmYes');
+  yes.textContent = yesLabel; yes.className = yesClass;
+  confirmAction = action;
+  confirmBox.classList.add('show');
+}
 function leaveGame(action) {
   if (busy) return;
   if (!moves || over) { action(); return; }
-  document.getElementById('confirmMsg').textContent = "You're " + moves + (moves === 1 ? ' move' : ' moves')
-    + ' into this game with ' + score + (score === 1 ? ' point' : ' points') + '. Starting again ends it.';
-  confirmAction = action;
-  confirmBox.classList.add('show');
+  askConfirm('Start a new game?', "You're " + moves + (moves === 1 ? ' move' : ' moves')
+    + ' into this game with ' + score + (score === 1 ? ' point' : ' points') + '. Starting again ends it.',
+    'New game', 'btn-orange', action);
 }
 document.getElementById('confirmYes').onclick = () => {
   confirmBox.classList.remove('show');
@@ -1729,7 +1743,9 @@ document.addEventListener('keydown', e => {
 });
 
 // Start where they left off: today's daily or their Play more game, carrying on if it's in progress
-if (mode === 'daily') openDaily(); else openPractice();
+// ...but today's daily comes first: until it's finished, the game always opens on it
+const dailyDoneToday = () => !!(store.daily && store.daily.n === dailyNumber() && store.daily.over);
+if (mode === 'daily' || !dailyDoneToday()) openDaily(); else openPractice();
 // safety net when the app goes into the background (not mid-animation, when a word is half-applied)
 document.addEventListener('visibilitychange', () => { if (document.hidden && !busy) saveGame(); });
 fitToScreen();
@@ -1750,7 +1766,16 @@ function syncFromDisk() {
 }
 window.addEventListener('storage', e => { if (e.key === STORE_KEY) syncFromDisk(); });
 // ...and after midnight: if today's daily was finished, open the new one
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncFromDisk(); updateCountdown(); } });
+// Coming back to an app left open overnight in Play more: a new day's daily is waiting, so go to it
+// (the Play more game is saved, one tap away)
+let lastDayOpened = dailyNumber();
+function openNewDaily() {
+  const n = dailyNumber();
+  if (n === lastDayOpened) return;
+  lastDayOpened = n;
+  if (!busy && mode === 'practice' && !dailyDoneToday()) openDaily();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncFromDisk(); updateCountdown(); openNewDaily(); } });
 </script>
 </body>
 </html>
