@@ -39,35 +39,33 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
   <h1>Privacy</h1>
   <p class="updated">Last updated 21 October 2026</p>
 
-  <p><b>The short version:</b> Kablamagram has no accounts, no ads and never asks for your real name or email (challenges just use a nickname you choose). Your scores stay on your device. We count anonymous usage statistics to see how the game is played and make it better, and you can switch that off below.</p>
+  <p><b>The short version:</b> Kablamagram has no accounts, no ads and never asks for your real name or email (challenges just use a nickname you choose). Your scores stay on your device. The game uses no cookies. We count anonymous usage statistics to see how the game is played and make it better, and you can switch that off below.</p>
 
   <h2>Saved on your device</h2>
   <p>Your high scores, longest word, words found online, chosen mode and settings (sound, whether you've seen the guide) are stored in your browser's local storage. They are never sent to us. They stay until you clear your browser data or uninstall the app.</p>
 
   <h2>Anonymous usage statistics</h2>
-  <p>We use two analytics services, Google Analytics and Umami, to understand how the game is used. They record:</p>
+  <p>We use Umami, a privacy-friendly analytics service, to understand how the game is used. It records:</p>
   <ul>
     <li>pages viewed, and whether the game was opened in a browser or as an installed app</li>
     <li>game events: games started and finished, mode, score, the <i>length</i> of words played (not the words themselves), words the game didn't recognise or found online (so missing ones can be added to the dictionary), power tiles earned, shares, installs, and use of the help and sound buttons</li>
     <li>device type, browser, operating system and screen size</li>
-    <li>approximate location (country and city), worked out from your IP address. Neither service stores IP addresses.</li>
+    <li>approximate location (country and city), worked out from your IP address. Umami does not store IP addresses.</li>
   </ul>
   <p>We don't collect names, emails or anything that identifies you directly. The data is used only to improve Kablamagram. It is not sold, and it is not used for advertising.</p>
 
   <h2>Cookies</h2>
-  <p>Google Analytics sets cookies (named <code>_ga</code>) so it can tell one visit from another. If you're in the EU/EEA, the UK or Switzerland, analytics cookies are only used if you tap <b>Allow</b> when the game asks. Otherwise Google only receives basic, cookieless signals that can't recognise you on a later visit.</p>
-  <p>Umami uses no cookies at all and collects nothing that identifies you, so it counts every visit unless you switch analytics off below.</p>
+  <p>Kablamagram uses no cookies. Umami counts visits without cookies and collects nothing that can recognise you, so there's nothing to accept. Your game progress is kept in your browser's local storage (see above), which never leaves your device.</p>
 
   <h2>Your choice</h2>
   <div class="optout">
     <p id="optStatus">Checking&hellip;</p>
-    <button id="optAllow" hidden>Allow anonymous stats</button>
     <button id="optBtn" hidden></button>
   </div>
-  <p style="margin-top:10px">This choice is saved on this device only. You can also use Google's <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener">browser opt-out add-on</a>.</p>
+  <p style="margin-top:10px">This choice is saved on this device only.</p>
 
   <h2>Challenge links</h2>
-  <p>When you challenge a friend, the link you send holds the board, your score and the nickname you typed. It goes only to whoever you share it with; we don't store it. When the link is opened, the game reads it and removes it from the address straight away, before any analytics loads, so your nickname is never sent to Google Analytics or Umami. Your nickname is remembered on your device for next time.</p>
+  <p>When you challenge a friend, the link you send holds the board, your score and the nickname you typed. It goes only to whoever you share it with; we don't store it. When the link is opened, the game reads it and removes it from the address straight away, before any analytics loads, so your nickname is never sent to our analytics. Your nickname is remembered on your device for next time.</p>
 
   <h2>Daily leaderboard</h2>
   <p>The leaderboard is optional. If you join it, the game sends your nickname, your daily score and a random code made by the game on your device (so you can only appear once a day) to our leaderboard, which runs on Cloudflare. It stores only those, along with the puzzle number and the time. No email, real name or IP address is stored. Everyone can see the nicknames and scores on the day's top 20. Entries are deleted automatically after 30 days. To remove yourself sooner, open the leaderboard in the game and tap <b>Remove me from the leaderboard</b>: it deletes all your entries straight away. If you've lost access to the device you played on, email <a href="mailto:kablamagram@gmail.com">kablamagram@gmail.com</a> with the nickname and the puzzle number. If you don't join, nothing is sent.</p>
@@ -80,7 +78,6 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
     <li><b>Wiktionary</b> (run by the Wikimedia Foundation) is used to check unknown words: see the <a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" rel="noopener">Wikimedia privacy policy</a>.</li>
     <li><b>Cloudflare</b> runs the daily leaderboard: see <a href="https://www.cloudflare.com/privacypolicy/" rel="noopener">Cloudflare's privacy policy</a>.</li>
     <li><b>Umami</b> (cookie-free analytics): see <a href="https://umami.is/privacy" rel="noopener">Umami's privacy policy</a>.</li>
-    <li><b>Google Analytics</b>: see <a href="https://policies.google.com/privacy" rel="noopener">Google's privacy policy</a> and <a href="https://policies.google.com/technologies/partner-sites" rel="noopener">how Google uses information from sites that use its services</a>.</li>
     <li><b>GitHub Pages</b> hosts the game and may log technical data such as IP addresses for security. See <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener">GitHub's privacy statement</a>.</li>
   </ul>
 
@@ -94,40 +91,22 @@ button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 rgba(255,2
   <p>Questions about privacy, or anything else? Email <a href="mailto:kablamagram@gmail.com">kablamagram@gmail.com</a>.</p>
 </main>
 <script>
-// Same storage the game uses ('wordcrush.v1'): analytics === false means opted out completely;
-// consent 'granted' / 'denied' is the answer to the game's prompt in Europe (same time-zone test as the game)
+// Same storage the game uses ('wordcrush.v1'): analytics === false means this device sends nothing
 const KEY = 'wordcrush.v1';
-let zone = ''; try { zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
-const inEurope = /^(Europe\/|Atlantic\/(Canary|Madeira|Azores|Reykjavik|Faroe)|Asia\/(Nicosia|Famagusta))/.test(zone);
 function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
 function save(s) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} show(); }
-const statusEl = document.getElementById('optStatus'), main = document.getElementById('optBtn'), allow = document.getElementById('optAllow');
+const statusEl = document.getElementById('optStatus'), main = document.getElementById('optBtn');
 function show() {
-  const s = load();
-  allow.hidden = true; main.hidden = false;
-  if (s.analytics === false) {
-    statusEl.textContent = 'Analytics is OFF on this device. Nothing is sent to Google Analytics or Umami.';
-    main.textContent = 'Turn analytics back on';
-  } else if (inEurope && s.consent === 'granted') {
-    statusEl.textContent = 'You allowed anonymous stats with cookies on this device.';
-    main.textContent = 'Withdraw permission';
-  } else if (inEurope) {
-    statusEl.textContent = 'Anonymous stats without cookies on this device (you haven’t allowed cookies).';
-    main.textContent = 'Turn off analytics completely';
-    allow.hidden = false;
-  } else {
-    statusEl.textContent = 'Analytics is ON on this device.';
-    main.textContent = 'Turn off analytics';
-  }
+  const off = load().analytics === false;
+  main.hidden = false;
+  statusEl.textContent = off ? 'Analytics is OFF on this device. Nothing is sent.' : 'Anonymous, cookie-free stats are ON on this device.';
+  main.textContent = off ? 'Turn analytics back on' : 'Turn off analytics';
 }
 main.onclick = () => {
   const s = load();
-  if (s.analytics === false) delete s.analytics;
-  else if (inEurope && s.consent === 'granted') s.consent = 'denied';
-  else s.analytics = false;
+  if (s.analytics === false) delete s.analytics; else s.analytics = false;
   save(s);
 };
-allow.onclick = () => { const s = load(); s.consent = 'granted'; s.seenNotice = true; save(s); };
 show();
 </script>
 </body>

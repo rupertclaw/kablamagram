@@ -45,17 +45,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Kablamagram">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- Google Analytics (GA4). Only loads on the real site, so local testing never pollutes the reports.
-     Consent Mode by region: analytics cookies everywhere except the EU/EEA, UK and Switzerland, where
-     Google only gets cookieless pings unless the player taps Allow on the consent prompt (shown to
-     anyone on a European time zone). Never any ad cookies. Players can opt out entirely on the
-     privacy page.
-     Umami (cookieless, no personal data, so no consent needed) gets the same page view and game
-     events, so visitors who decline cookies or block Google are still counted. Same rules: real site
-     only, and the privacy page's opt-out stops it too. -->
+<!-- Analytics: Umami only. It's cookie-free and collects no personal data, so there's no consent prompt.
+     It loads only on the real site (local testing never pollutes the numbers), and the privacy page's
+     switch turns it off on a device. -->
 <script>
 // Challenge links (?c=board&s=score&by=name): keep them for the game, then strip them from the address
-// before analytics loads, so a player's nickname never reaches Google or Umami
+// before analytics loads, so a player's nickname never reaches the analytics
 let incomingChallenge = null;
 try {
   const q = new URLSearchParams(location.search);
@@ -64,33 +59,12 @@ try {
     history.replaceState(null, '', location.pathname + location.hash);
   }
 } catch (e) {}
-window.dataLayer = window.dataLayer || [];
-function gtag() { dataLayer.push(arguments); }
-const GA_ID = 'G-FTF1MR21RP';
-const GA_LIVE = /(^|\.)kablamagram\.com$/.test(location.hostname);
-gtag('consent', 'default', {analytics_storage: 'granted', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied'});
-gtag('consent', 'default', {analytics_storage: 'denied', region: ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT',
-  'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'IS', 'LI', 'NO', 'GB', 'CH']});
-// Google picks the region from the IP address; the page can't see that, so it uses the time zone
-// to decide who gets asked (Cyprus is Asia/Nicosia; a few non-EU European zones get asked too, harmlessly)
-let gaTimeZone = '';
-try { gaTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
-const IN_EUROPE = /^(Europe\/|Atlantic\/(Canary|Madeira|Azores|Reykjavik|Faroe)|Asia\/(Nicosia|Famagusta))/.test(gaTimeZone);
-let gaPrefs = {};
-try { gaPrefs = JSON.parse(localStorage.getItem('wordcrush.v1') || '{}'); } catch (e) {}
-const gaOptedOut = gaPrefs.analytics === false;
-if (gaOptedOut) window['ga-disable-' + GA_ID] = true; // send nothing at all
-if (gaPrefs.consent === 'granted') gtag('consent', 'update', {analytics_storage: 'granted'});
-if (GA_LIVE && !gaOptedOut) {
-  gtag('js', new Date());
-  gtag('config', GA_ID);
-  const s = document.createElement('script');
-  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA_ID;
-  document.head.appendChild(s);
-}
+const SITE_LIVE = /(^|\.)kablamagram\.com$/.test(location.hostname);
+let analyticsOff = false; // the privacy page's switch
+try { analyticsOff = JSON.parse(localStorage.getItem('wordcrush.v1') || '{}').analytics === false; } catch (e) {}
 // Umami: game events made before its script arrives wait in this queue (capped, in case it's blocked)
 const UMAMI_ID = '9742d090-50eb-4a8d-abb7-4b75d79d1a6d';
-const UMAMI_ON = GA_LIVE && !gaOptedOut;
+const UMAMI_ON = SITE_LIVE && !analyticsOff;
 const umamiQueue = [];
 function umamiTrack(name, data) {
   if (!UMAMI_ON) return;
@@ -367,14 +341,6 @@ button.sound-btn {
   flex: none; width: 40px; height: 40px; padding: 0; margin: 0 0 4px;
   border-radius: 50%; font-size: 1.1rem; text-shadow: none;
 }
-.consent {
-  position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 40; display: none; margin: 0 auto; max-width: 420px;
-  padding: 12px 14px; border-radius: 14px; background: #2f1f66; border: 1px solid rgba(255,255,255,0.25);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.5); font-size: 0.85rem; text-align: center;
-}
-.consent.show { display: block; }
-.consent a { color: #ffe27a; }
-.consent button { margin: 10px 4px 2px; padding: 8px 16px; font-size: 0.9rem; }
 .over-buttons { display: flex; gap: 8px; justify-content: center; }
 .over-buttons button { margin: 10px 0 4px; }
 button.install-btn {
@@ -509,16 +475,6 @@ button.install-btn.show { display: block; }
 <div class="reset-row">
   <button id="newBtn" class="btn-orange">New Game</button>
   <button id="shuffleBtn" class="btn-teal">Shuffle</button>
-</div>
-<div class="consent" id="consentPrompt" role="dialog" aria-label="Analytics consent">
-  Your scores are saved on this device. Can we use an analytics cookie to count your return visits?
-  Anonymous, no ads, nothing sold. <a href="privacy.html">Privacy</a>
-  <div><button id="consentNo">No thanks</button><button class="primary" id="consentYes">Allow</button></div>
-</div>
-<div class="consent" id="notice" role="status">
-  Your scores are saved on this device and stay until you clear your browser data.
-  We collect anonymous usage stats to improve the game. <a href="privacy.html">Privacy</a>
-  <div><button class="primary" id="noticeOk">Got it</button></div>
 </div>
 <div class="coach" id="coach" role="dialog" aria-modal="true" aria-labelledby="coachText">
   <div class="coach-hole" id="coachHole"></div>
@@ -696,9 +652,10 @@ function loadStore() {
 }
 function saveStore() {
   try {
-    // the analytics opt-out and EU consent can also be changed on the privacy page: keep whatever was last saved
+    // the analytics switch can also be changed on the privacy page: keep whatever was last saved
     const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
-    for (const k of ['analytics', 'consent']) { if (k in saved) store[k] = saved[k]; else delete store[k]; }
+    if ('analytics' in saved) store.analytics = saved.analytics; else delete store.analytics;
+    delete store.consent; delete store.seenNotice; // left over from the old cookie prompt
     mergeSaved(saved);
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   } catch (e) { /* storage blocked: records just won't persist */ }
@@ -717,7 +674,7 @@ function mergeSaved(saved) {
     store.learned = [...new Set([...(store.learned || []), ...saved.learned])];
     for (const w of saved.learned) WORDS.add(w);
   }
-  for (const k of ['seenTips', 'seenHelp', 'seenNotice']) if (saved[k]) store[k] = saved[k];
+  for (const k of ['seenTips', 'seenHelp']) if (saved[k]) store[k] = saved[k];
 }
 const store = loadStore();
 store.highScores = store.highScores || {};
@@ -775,8 +732,8 @@ function randomGrid() {
   return Array.from({length: ROWS}, () => Array.from({length: COLS}, () => newTile(randLetter())));
 }
 
-// Analytics events (GA4, set up in <head>). Off the live site gtag only queues them locally.
-function track(name, params = {}) { gtag('event', name, params); umamiTrack(name, params); }
+// Analytics events go to Umami (set up in <head>); off the live site they're dropped.
+function track(name, params = {}) { umamiTrack(name, params); }
 
 // Sound effects, synthesised with Web Audio: no files to download, works offline.
 // The audio context starts on the first tap (browsers block sound before a user gesture).
@@ -1883,34 +1840,6 @@ soundBtn.onclick = () => {
   track('sound_toggle', {on: store.sound});
 };
 
-// First visit: in Europe, ask before using analytics cookies; elsewhere, a one-time notice.
-// The consent answer is written straight to storage (saveStore keeps the stored value, see above).
-const noticeEl = document.getElementById('notice'), consentEl = document.getElementById('consentPrompt');
-function setConsent(choice) {
-  store.consent = choice; store.seenNotice = true;
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
-    saved.consent = choice; saved.seenNotice = true;
-    localStorage.setItem(STORE_KEY, JSON.stringify(saved));
-  } catch (e) {}
-  saveStore();
-  consentEl.classList.remove('show');
-}
-// shown once the quick tips are out of the way (see below)
-function showFirstVisitNotice() {
-  if (IN_EUROPE && !store.consent && store.analytics !== false) consentEl.classList.add('show');
-  else if (!store.seenNotice) noticeEl.classList.add('show');
-}
-document.getElementById('consentYes').onclick = () => {
-  setConsent('granted');
-  gtag('consent', 'update', {analytics_storage: 'granted'});
-  track('analytics_consent', {choice: 'granted'});
-};
-document.getElementById('consentNo').onclick = () => setConsent('denied');
-document.getElementById('noticeOk').onclick = () => {
-  noticeEl.classList.remove('show');
-  store.seenNotice = true; saveStore();
-};
 showSoundState();
 // Anything that would throw away a game in progress asks first. "Keep playing" is the default:
 // Esc, Enter or a tap outside the box all keep the game.
@@ -1993,7 +1922,7 @@ function showTip(i) {
 function startTips() { coachEl.classList.add('show'); showTip(0); }
 function endTips(skipped) {
   coachEl.classList.remove('show');
-  if (!store.seenTips) { store.seenTips = true; store.seenHelp = true; saveStore(); showFirstVisitNotice(); }
+  if (!store.seenTips) { store.seenTips = true; store.seenHelp = true; saveStore(); }
   track(skipped ? 'tips_skipped' : 'tips_done', {tip: tipIndex + 1});
 }
 document.getElementById('coachNext').onclick = () => (tipIndex < TIPS.length - 1 ? showTip(tipIndex + 1) : endTips(false));
@@ -2069,7 +1998,7 @@ fitToScreen();
 // analytics notice; returning players (including anyone who saw the old long guide) skip the tips
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
   fitToScreen();
-  if (!store.seenTips && !store.seenHelp) startTips(); else showFirstVisitNotice();
+  if (!store.seenTips && !store.seenHelp) startTips();
 });
 // Coming back to this copy of the game: pick up anything another copy (app or tab) saved meanwhile,
 // so a daily finished elsewhere shows as finished here and can't be played again
