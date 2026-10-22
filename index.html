@@ -314,6 +314,7 @@ button.coach-skip { background: none; box-shadow: none; text-shadow: none; paddi
 @keyframes stat-bump { 40% { transform: scale(1.3); color: #ffe27a; } }
 .current-word { min-height: 30px; line-height: 30px; font-weight: bold; margin-top: 4px; font-size: 1.5rem; letter-spacing: 3px; }
 .current-word.empty { font-size: 0.9rem; font-weight: normal; letter-spacing: 0; opacity: 0.6; }
+.current-word .wild-fill { color: #e9a6ff; text-decoration: underline; text-underline-offset: 4px; }
 .current-word.note { color: #ffe27a; font-weight: 700; opacity: 1; line-height: 1.2; display: flex; align-items: center; justify-content: center; text-align: center; }
 .feedback { min-height: 18px; font-size: 0.85rem; margin-top: 0; opacity: 0.9; width: 100%; text-align: center; white-space: nowrap; overflow: hidden; } /* one line: long messages shrink to fit */
 .feedback.good { color: #2ecc71; }
@@ -606,7 +607,7 @@ button.install-btn.show { display: block; }
 
     <h3>Power tiles</h3>
     <p>Long words leave a power tile where the word ended:</p>
-    <div class="help-power"><div class="tile power-wild">?</div><div><b>Wildcard</b> (6-letter word). Stands for any letter you need.</div></div>
+    <div class="help-power"><div class="tile power-wild">?</div><div><b>? tile</b> (6-letter word). Stands for any letter: spell your word with the ? where the missing letter goes and the game fills it in (C ? T makes CAT). The word line shows the word as you tap.</div></div>
     <div class="help-power"><div class="tile power-x2">E</div><div><b>Double</b> (7-letter word). A word using it scores &times;2. Two in one word score &times;4!</div></div>
     <div class="help-power"><div class="tile power-bomb">R</div><div><b>Kablam</b> (8- or 9-letter word). Use it in a word to blow up all the tiles around it, +5 points each.</div></div>
     <div class="help-power"><div class="tile power-x3">N</div><div><b>Triple</b> (word of 10+ letters). A word using it scores &times;3.</div></div>
@@ -709,7 +710,7 @@ function mergeSaved(saved) {
     store.learned = [...new Set([...(store.learned || []), ...saved.learned])];
     for (const w of saved.learned) WORDS.add(w);
   }
-  for (const k of ['seenTips', 'seenHelp']) if (saved[k]) store[k] = saved[k];
+  for (const k of ['seenTips', 'seenHelp', 'seenWildTip']) if (saved[k]) store[k] = saved[k];
   for (const [n, d] of Object.entries(saved.past || {})) {
     store.past = store.past || {};
     if (dailyProgress(d) > dailyProgress(store.past[n])) store.past[n] = d;
@@ -757,6 +758,11 @@ function showWordLine() {
   const vs = vsInfo();
   const hint = vs && !moves && !over ? '⚔️ ' + vs.by + ' challenges you: beat ' + vs.target + '!' : 'Tap letters to spell a word';
   currentWordEl.textContent = w || bannerText || hint;
+  // with a ? in it: show the word it makes, the letter the ? stands for highlighted (TRAI?ERS: TRAINERS)
+  if (w.includes('?') && w.length >= 3 && path.length) {
+    const {word} = resolveWord(w.toLowerCase());
+    if (word) currentWordEl.innerHTML = [...word.toUpperCase()].map((ch, i) => w[i] === '?' ? '<span class="wild-fill">' + ch + '</span>' : ch).join('');
+  }
   currentWordEl.classList.toggle('empty', !w);
   currentWordEl.classList.toggle('note', !w && !!bannerText);
 }
@@ -766,7 +772,7 @@ const submitBtn = document.getElementById('submitBtn');
 // 'x2' / 'x3' (double / triple the word's score) or 'bomb' (blasts the tiles around it; players see it as "Kablam").
 function newTile(l, p = null) { return {l, p}; }
 const POWER_FOR_LENGTH = {6: 'wild', 7: 'x2', 8: 'bomb', 9: 'bomb', 10: 'x3'};
-const POWER_NAMES = {wild: 'a ? wildcard: use it as any letter', x2: 'a ×2 tile: use it to double a word', x3: 'a ×3 tile: use it to triple a word', bomb: 'a Kablam tile: use it to blow up its neighbours'};
+const POWER_NAMES = {wild: 'a ? tile: use it in a word as any letter', x2: 'a ×2 tile: use it to double a word', x3: 'a ×3 tile: use it to triple a word', bomb: 'a Kablam tile: use it to blow up its neighbours'};
 const BLAST_PTS = 5; // per tile a bomb blows up
 const RARE_LETTERS = new Set(['Q', 'X', 'Z']), RARE_LETTER_BONUS = 1; // hard-to-use letters: a shade darker, and each counts as one extra letter when scoring
 
@@ -1650,7 +1656,10 @@ async function submitWord() {
   render();
   const limit = MODES[mode].moveLimit;
   if (limit && moves >= limit) endGame();
-  else saveGame();
+  else {
+    saveGame();
+    if (earned === 'wild' && !store.seenWildTip) showWildTip();
+  }
 }
 
 // Boggle matching: all 8 directions, no cell reuse, prefix-pruned DFS
@@ -2047,17 +2056,27 @@ const TIPS = [
   {target: '#modeRow', text: 'Everyone gets the same <b>Daily</b> puzzle, one try a day. Tap <b>Play more</b> for unlimited games.',
    demo: '<div class="demo-tabs"><span>Daily #1</span><span>Play more</span></div>'},
 ];
+// shown once, the first time a player earns a ? tile, pointing at it
+const WILD_TIP = {text: 'You earned a <b>?</b> tile! It can be any letter. Spell a word with the ? where the missing letter goes, and the game works out which letter fits.',
+  demo: miniTile('C') + miniTile('?', 'power-wild') + miniTile('T') + '<div class="demo-word">= CAT</div>'};
 const coachEl = document.getElementById('coach'), coachHole = document.getElementById('coachHole'), coachCard = document.getElementById('coachCard');
-let tipIndex = -1;
+let tipIndex = -1, tips = TIPS; // the tips being shown: the first-visit set, or one on its own
+function showWildTip() {
+  const i = grid.flat().findIndex(t => t && t.p === 'wild');
+  if (i < 0 || coachOpen() || helpOpen()) return;
+  tips = [{...WILD_TIP, target: boardEl.children[i]}];
+  coachEl.classList.add('show'); showTip(0);
+}
 function coachOpen() { return coachEl.classList.contains('show'); }
 function showTip(i) {
   tipIndex = i;
-  const tip = TIPS[i], r = document.querySelector(tip.target).getBoundingClientRect(), pad = 6;
+  const tip = tips[i], el = typeof tip.target === 'string' ? document.querySelector(tip.target) : tip.target;
+  const r = el.getBoundingClientRect(), pad = 6;
   Object.assign(coachHole.style, {left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + 2 * pad + 'px', height: r.height + 2 * pad + 'px'});
-  document.getElementById('coachStep').textContent = 'Tip ' + (i + 1) + ' of ' + TIPS.length;
+  document.getElementById('coachStep').textContent = tips.length > 1 ? 'Tip ' + (i + 1) + ' of ' + tips.length : 'New tile';
   document.getElementById('coachText').innerHTML = tip.text;
   document.getElementById('coachDemo').innerHTML = reduceMotion ? '' : tip.demo;
-  document.getElementById('coachNext').textContent = i === TIPS.length - 1 ? "Let's play!" : 'Got it';
+  document.getElementById('coachNext').textContent = i === tips.length - 1 && tips === TIPS ? "Let's play!" : 'Got it';
   // the card goes below the highlight if it fits, else above, else over its lower edge
   coachCard.style.top = coachCard.style.bottom = '';
   const h = coachCard.offsetHeight, gap = 14;
@@ -2065,13 +2084,14 @@ function showTip(i) {
   else if (r.top - pad - gap - h > 0) coachCard.style.top = r.top - pad - gap - h + 'px';
   else coachCard.style.top = Math.max(8, r.bottom - h - 12) + 'px';
 }
-function startTips() { coachEl.classList.add('show'); showTip(0); }
+function startTips() { tips = TIPS; coachEl.classList.add('show'); showTip(0); }
 function endTips(skipped) {
   coachEl.classList.remove('show');
+  if (tips !== TIPS) { store.seenWildTip = true; saveStore(); track('wild_tip', {skipped}); tips = TIPS; return; }
   if (!store.seenTips) { store.seenTips = true; store.seenHelp = true; saveStore(); }
   track(skipped ? 'tips_skipped' : 'tips_done', {tip: tipIndex + 1});
 }
-document.getElementById('coachNext').onclick = () => (tipIndex < TIPS.length - 1 ? showTip(tipIndex + 1) : endTips(false));
+document.getElementById('coachNext').onclick = () => (tipIndex < tips.length - 1 ? showTip(tipIndex + 1) : endTips(false));
 document.getElementById('coachSkip').onclick = () => endTips(true);
 document.getElementById('replayTips').onclick = e => { e.preventDefault(); closeHelp(); startTips(); };
 document.getElementById('moreGames').onclick = () => track('more_games', {to: 'bumpuzzled'});
