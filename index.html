@@ -388,6 +388,12 @@ button.install-btn.show { display: block; }
 .past-list button { flex: none; margin: 2px 0 4px; padding: 6px 10px; font-size: 0.8rem; border-radius: 10px; }
 .past-list button.lb { padding: 6px 8px; }
 .past-list .played { white-space: nowrap; font-size: 0.8rem; opacity: 0.8; padding: 0 4px; }
+.feedback-field textarea {
+  display: block; width: 100%; min-height: 96px; margin-top: 6px; padding: 10px 12px; font: inherit; color: white; resize: vertical;
+  border-radius: 10px; border: 2px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.12);
+}
+.feedback-field textarea::placeholder { color: rgba(255,255,255,0.55); }
+.feedback-small { font-size: 0.78rem; opacity: 0.75; margin-top: 4px; }
 .challenge-note { min-height: 1.2em; margin-top: 6px; font-size: 0.85rem; color: #ffe27a; word-break: break-all; }
 .share-more a { color: #ffe27a; font-weight: 700; text-decoration: none; }
 .share-more a:hover { text-decoration: underline; }
@@ -534,6 +540,20 @@ button.install-btn.show { display: block; }
     <p class="challenge-note" id="challengeNote"></p>
   </div>
 </div>
+<div class="help" id="feedbackBox">
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle" style="text-align:center">
+    <h2 id="feedbackTitle">Send feedback</h2>
+    <p>Found a bug, have an idea, or played a real word the game didn't accept? Tell us here.</p>
+    <label class="name-field feedback-field">Your message <textarea id="feedbackMsg" maxlength="2000" placeholder="e.g. It didn't accept the word ..."></textarea></label>
+    <label class="name-field">Your email (optional, only if you'd like a reply) <input id="feedbackEmail" type="email" maxlength="120" autocomplete="email" placeholder="you@example.com"></label>
+    <div class="over-buttons">
+      <button class="btn-blue" id="feedbackCancel">Cancel</button>
+      <button class="btn-orange" id="feedbackSend">Send</button>
+    </div>
+    <p class="challenge-note" id="feedbackNote"></p>
+    <p class="feedback-small">Your message (and email, if you add one) is sent to us through Formspree. See <a href="privacy.html" style="color:#ffe27a">Privacy</a>.</p>
+  </div>
+</div>
 <div class="help" id="pastBox">
   <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="pastTitle" style="text-align:center">
     <h2 id="pastTitle">Past puzzles</h2>
@@ -619,6 +639,7 @@ button.install-btn.show { display: block; }
     <p>172,000+ words built in, so it works offline, plus Wiktionary for newer words when you're online.</p>
 
     <button class="primary" id="helpClose">Let's play!</button>
+    <p style="text-align:center; margin-top:10px"><a href="#" id="feedbackLink" style="color:#ffe27a; font-weight:700">&#x1F4AC; Send feedback or suggest a word</a></p>
     <p style="text-align:center; font-size:0.85rem; margin-top:6px"><a href="#" id="replayTips" style="color:#ffe27a">Replay the quick tips</a> &middot; <a href="privacy.html" style="color:#ffe27a">Privacy</a></p>
     <p class="more-games">More from Puzzlewick Studios: <a href="https://bumpuzzled.com/" id="moreGames">Bumpuzzled</a>, a brain-teaser where every step is one-way.</p>
   </div>
@@ -2095,6 +2116,38 @@ document.getElementById('coachNext').onclick = () => (tipIndex < tips.length - 1
 document.getElementById('coachSkip').onclick = () => endTips(true);
 document.getElementById('replayTips').onclick = e => { e.preventDefault(); closeHelp(); startTips(); };
 document.getElementById('moreGames').onclick = () => track('more_games', {to: 'bumpuzzled'});
+
+// Feedback: a short form sent to Formspree (which emails it to us); the game stays open
+const FEEDBACK_URL = 'https://formspree.io/f/xaqglnpa';
+const feedbackBox = document.getElementById('feedbackBox'), feedbackNote = document.getElementById('feedbackNote');
+document.getElementById('feedbackLink').onclick = e => {
+  e.preventDefault(); closeHelp();
+  feedbackNote.textContent = '';
+  feedbackBox.classList.add('show');
+  setTimeout(() => document.getElementById('feedbackMsg').focus(), 50);
+  track('feedback_open');
+};
+document.getElementById('feedbackCancel').onclick = closeHelp;
+feedbackBox.onclick = e => { if (e.target === feedbackBox) closeHelp(); };
+document.getElementById('feedbackSend').onclick = async () => {
+  const msgEl = document.getElementById('feedbackMsg'), message = msgEl.value.trim(), email = document.getElementById('feedbackEmail').value.trim();
+  if (message.length < 3) { feedbackNote.textContent = 'Write a few words first.'; msgEl.focus(); return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { feedbackNote.textContent = "That email doesn't look right (or leave it empty)."; return; }
+  const btn = document.getElementById('feedbackSend');
+  btn.disabled = true; feedbackNote.textContent = 'Sending\u2026';
+  try {
+    const r = await fetch(FEEDBACK_URL, {method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+      body: JSON.stringify({_subject: 'Kablamagram feedback', game: 'Kablamagram', message, ...(email ? {email} : {}),
+        playing: mode === 'practice' ? 'Play more' : mode === 'challenge' ? 'Challenge' : 'Daily #' + dailyNum})});
+    if (!r.ok) throw new Error('failed');
+    msgEl.value = ''; document.getElementById('feedbackEmail').value = '';
+    feedbackNote.textContent = 'Thanks! Your message was sent.';
+    track('feedback_sent');
+  } catch (err) {
+    feedbackNote.textContent = "Couldn't send it. Check your connection, or email kablamagram@gmail.com.";
+  }
+  btn.disabled = false;
+};
 window.addEventListener('resize', () => { if (coachOpen()) showTip(tipIndex); });
 
 // Install as an app. Android/desktop Chrome hand us a real install prompt (beforeinstallprompt);
@@ -2137,6 +2190,10 @@ document.addEventListener('keydown', e => {
   if (document.getElementById('boardBox').classList.contains('show')) {
     if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'boardName') { e.preventDefault(); document.getElementById('boardJoinBtn').click(); }
     else if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); closeHelp(); }
+    return;
+  }
+  if (feedbackBox.classList.contains('show')) { // typing a message: Enter is a new line, Escape cancels
+    if (e.key === 'Escape') closeHelp();
     return;
   }
   if (document.getElementById('challengeBox').classList.contains('show')) { // typing a name: Enter sends
