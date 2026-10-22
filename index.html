@@ -378,6 +378,15 @@ button.install-btn.show { display: block; }
 .board-list .nick { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-list .pts { font-variant-numeric: tabular-nums; }
 .board-remove { display: inline-block; margin-top: 8px; font-size: 0.8rem; color: rgba(255,255,255,0.75); }
+/* Past puzzles list */
+.past-note { font-size: 0.85rem; opacity: 0.85; margin: 4px 0 2px; }
+.past-list li { align-items: center; gap: 8px; padding: 4px 6px 4px 10px; }
+.past-list .day { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.past-list .day small { font-weight: 600; opacity: 0.75; }
+.past-list .pts { color: #ffe27a; }
+.past-list button { flex: none; margin: 2px 0 4px; padding: 6px 10px; font-size: 0.8rem; border-radius: 10px; }
+.past-list button.lb { padding: 6px 8px; }
+.past-list .played { white-space: nowrap; font-size: 0.8rem; opacity: 0.8; padding: 0 4px; }
 .challenge-note { min-height: 1.2em; margin-top: 6px; font-size: 0.85rem; color: #ffe27a; word-break: break-all; }
 .share-more a { color: #ffe27a; font-weight: 700; text-decoration: none; }
 .share-more a:hover { text-decoration: underline; }
@@ -438,6 +447,7 @@ button.install-btn.show { display: block; }
 <div class="mode-bar">
   <div class="mode-row" id="modeRow">
     <button data-mode="daily">Daily</button>
+    <button data-mode="archive">Past</button>
     <button data-mode="practice">Play more</button>
   </div>
   <button class="install-btn" id="installBtn">&#x2B07; Install</button>
@@ -523,6 +533,14 @@ button.install-btn.show { display: block; }
     <p class="challenge-note" id="challengeNote"></p>
   </div>
 </div>
+<div class="help" id="pastBox">
+  <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="pastTitle" style="text-align:center">
+    <h2 id="pastTitle">Past puzzles</h2>
+    <p class="past-note">Missed a day? Play it here, one try each. Past puzzles don't count towards your streak or the leaderboard.</p>
+    <ol class="board-list past-list" id="pastList"></ol>
+    <div class="over-buttons"><button class="primary" id="pastClose">Close</button></div>
+  </div>
+</div>
 <div class="help" id="boardBox">
   <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="boardTitle" style="text-align:center">
     <h2 id="boardTitle">Today's leaderboard</h2>
@@ -580,6 +598,7 @@ button.install-btn.show { display: block; }
     <p>Every word and every swap uses a move, and your last move must be a word. You also get 2 free shuffles.</p>
     <ul>
       <li><b>Daily puzzle</b>: everyone gets the same board each day, so you can compare scores with friends. One try per day, and your progress is saved if you leave. A new puzzle arrives at midnight; play on consecutive days to build a streak.</li>
+      <li><b>Past puzzles</b>: missed a day? Tap <b>Past</b> to play any earlier daily (one try each), or see how you did on ones you played. These don't count towards your streak or the leaderboard.</li>
       <li><b>Play more</b>: as many games as you like on random boards.</li>
       <li><b>Daily leaderboard</b>: after the daily, see how you rank against everyone today. Joining is optional and only needs a nickname.</li>
       <li><b>Challenge a friend</b>: after any game, tap <b>Challenge</b> to send a link to the same board with your score to beat. They see your score, never your words, and get one go.</li>
@@ -630,6 +649,7 @@ const MODES = {
   daily:    {label: 'Daily', moveLimit: 10, shuffles: 2},
   practice: {label: 'Play more', moveLimit: 10, shuffles: 2},
   challenge: {label: 'Challenge', moveLimit: 10, shuffles: 2}, // a friend's board from a challenge link
+  archive: {label: 'Past puzzle', moveLimit: 10, shuffles: 2}, // an earlier day's daily, played late
 };
 
 // Daily puzzle number: days since launch by the player's own calendar date (#1 = 18 Oct 2026), so a
@@ -658,7 +678,9 @@ function seedFor(n) { // FNV-1a hash of the puzzle number
 
 // Records live in this browser only:
 // {mode, highScores: {daily, moves}, longestWord: {word, date},
-//  daily: today's puzzle in progress or finished, streak: {count, lastN}}
+//  daily: today's puzzle in progress or finished, streak: {count, lastN},
+//  past: {n: earlier dailies, finished or in progress (moved here when a new day's daily starts,
+//  or played from Past puzzles)}, archiveN: the past puzzle last opened}
 const STORE_KEY = 'wordcrush.v1';
 function loadStore() {
   try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
@@ -688,6 +710,10 @@ function mergeSaved(saved) {
     for (const w of saved.learned) WORDS.add(w);
   }
   for (const k of ['seenTips', 'seenHelp']) if (saved[k]) store[k] = saved[k];
+  for (const [n, d] of Object.entries(saved.past || {})) {
+    store.past = store.past || {};
+    if (dailyProgress(d) > dailyProgress(store.past[n])) store.past[n] = d;
+  }
 }
 const store = loadStore();
 store.highScores = store.highScores || {};
@@ -700,20 +726,23 @@ let path = [];      // [[r, c], ...] tiles the player has tapped, in order
 let wordsMade = []; // {word, pts}
 let moveLog = [];   // for the share message: {len, bomb} per word, 'swap' per swap
 let mode = store.mode === 'practice' ? 'practice'
-  : store.mode === 'challenge' && store.challenge && !store.challenge.over ? 'challenge' : 'daily';
+  : store.mode === 'challenge' && store.challenge && !store.challenge.over ? 'challenge'
+  : store.mode === 'archive' && store.archiveN > 0 && store.archiveN < dailyNumber() ? 'archive' : 'daily';
 let challenge = null; // {id, kind: daily|board, n, seed, by, target} while a challenge is being played
-let dailyNum = dailyNumber();
+let dailyNum = dailyNumber(); // the daily being played: today's, or an earlier one in Past puzzles
 let startHigh = 0;  // high score when this game began, to spot a new record at the end
 let shufflesLeft = Infinity;
 let lastSwap = null; // [r1, c1, r2, c2] of the swap Undo can take back
 
+// A daily board: today's, or an earlier one played from Past puzzles (they share the daily's records)
+const dailyBoard = () => mode === 'daily' || mode === 'archive';
 // High score key per mode ('moves' is Play more's, kept from when it was the 10-move mode, so old records carry over)
-function scoreKey() { return mode === 'daily' ? 'daily' : 'moves'; }
+function scoreKey() { return dailyBoard() ? 'daily' : 'moves'; }
 // The high score shown: the daily's own best in the daily; in Play more, the best of any game (daily included)
 function shownHigh() {
   const h = store.highScores;
   if (mode === 'challenge') return challenge.target;
-  return mode === 'daily' ? h.daily || 0 : Math.max(h.moves || 0, h.daily || 0);
+  return dailyBoard() ? h.daily || 0 : Math.max(h.moves || 0, h.daily || 0);
 }
 
 const boardEl = document.getElementById('board');
@@ -806,7 +835,7 @@ function countMove() {
   moves++;
   if (!startTracked) {
     startTracked = true;
-    track('game_start', {mode, ...(mode === 'daily' ? {puzzle: dailyNum} : {}), ...(mode === 'challenge' ? {challenge: challenge.kind} : {})});
+    track('game_start', {mode, ...(dailyBoard() ? {puzzle: dailyNum} : {}), ...(mode === 'challenge' ? {challenge: challenge.kind} : {})});
   }
 }
 
@@ -827,8 +856,8 @@ function refreshModeUi() {
   document.getElementById('newBtn').style.display = mode === 'practice' ? '' : 'none'; // the daily and a challenge get one attempt
   document.getElementById('againBtn').textContent = mode === 'practice' ? 'Play again' : 'Play more';
   const streak = currentStreak(), chip = document.getElementById('streakChip');
-  chip.hidden = mode !== 'daily' || !streak;
-  chip.textContent = '\u{1F525} ' + streak + '-day streak';
+  chip.hidden = mode === 'archive' ? false : mode !== 'daily' || !streak;
+  chip.textContent = mode === 'archive' ? '\u{1F4C5} #' + dailyNum + ' \u00B7 ' + dayLabel(dailyNum) : '\u{1F525} ' + streak + '-day streak';
   fitToScreen();
 }
 // Days in a row with a finished daily, counting yesterday's run as still alive until today's is played
@@ -841,6 +870,7 @@ function newGame() {
   resetGame();
   seeded = true;
   if (mode === 'daily') { dailyNum = dailyNumber(); gameSeed = seedFor(dailyNum); }
+  else if (mode === 'archive') gameSeed = seedFor(dailyNum);
   else if (mode === 'challenge') gameSeed = challenge.seed;
   else gameSeed = (Math.random() * 4294967296) | 0;
   rngState = gameSeed;
@@ -857,7 +887,15 @@ function newGame() {
 // can't be used to get a second try.
 function saveGame() {
   const state = {grid, score, moves, wordsMade, moveLog, shufflesLeft, over, lastSwap};
-  if (mode === 'daily') store.daily = {n: dailyNum, rngState, ...state};
+  if (mode === 'daily') {
+    const prev = store.daily; // a new day's daily: the last one goes to Past puzzles (finished, or to finish there)
+    if (prev && prev.n !== dailyNum && prev.grid && (prev.over || prev.moves)) {
+      store.past = store.past || {};
+      if (dailyProgress(prev) > dailyProgress(store.past[prev.n])) store.past[prev.n] = prev;
+    }
+    store.daily = {n: dailyNum, rngState, ...state};
+  }
+  else if (mode === 'archive') (store.past = store.past || {})[dailyNum] = {n: dailyNum, rngState, ...state};
   else if (mode === 'challenge') store.challenge = {...challenge, rngState, ...state};
   else store.practice = {seed: gameSeed, rngState, ...state};
   saveStore();
@@ -878,6 +916,69 @@ function openDaily() {
   if (over) showResult(false);
   else if (moves >= MODES[mode].moveLimit) endGame(); // closed during the last word's animation
 }
+// Past puzzles: an earlier day's daily, new, carried on, or (when finished) its result
+function openArchive(n) {
+  if (n >= dailyNumber()) { openDaily(); return; }
+  mode = 'archive'; store.mode = 'archive'; store.archiveN = n; saveStore();
+  dailyNum = n;
+  const d = pastGame(n);
+  if (!d || !d.grid) { newGame(); return; }
+  resetGame();
+  seeded = true; gameSeed = seedFor(n);
+  ({grid, score, moves, wordsMade, moveLog, shufflesLeft, rngState} = d);
+  lastSwap = d.lastSwap || null;
+  over = !!d.over;
+  startTracked = moves > 0;
+  updateWordsPanel();
+  refreshModeUi();
+  render();
+  if (over) showResult(false);
+  else if (moves >= MODES[mode].moveLimit) endGame();
+}
+// This device's game for daily #n, if any (today's lives in store.daily, earlier ones in store.past)
+const pastGame = n => (store.daily && store.daily.n === n ? store.daily : (store.past || {})[n]) || null;
+// Daily #n's date, e.g. "Tue 20 Oct"
+const dayLabel = n => new Date(2026, 9, 17 + n).toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'});
+// Dailies played before results were kept: the streak still shows which days were finished
+function playedUnrecorded(n) {
+  const s = store.streak;
+  return !!s && n <= s.lastN && n > s.lastN - s.count && !pastGame(n);
+}
+const BOARD_DAYS = 30; // the leaderboard keeps 30 days
+function openPastList() {
+  const list = document.getElementById('pastList'), today = dailyNumber();
+  list.innerHTML = '';
+  for (let n = today - 1; n >= 1; n--) {
+    const li = document.createElement('li'), d = pastGame(n);
+    const day = document.createElement('span'); day.className = 'day';
+    day.innerHTML = '#' + n + ' <small>' + dayLabel(n) + '</small>';
+    li.appendChild(day);
+    if (d && d.over) { const pts = document.createElement('span'); pts.className = 'pts'; pts.textContent = d.score; li.appendChild(pts); }
+    if (playedUnrecorded(n)) {
+      const p = document.createElement('span'); p.className = 'played'; p.textContent = 'Played \u2713'; li.appendChild(p);
+    } else {
+      const b = document.createElement('button');
+      b.className = d && d.over ? 'btn-blue' : 'primary';
+      b.textContent = d && d.over ? 'Result' : d && d.moves ? 'Resume' : 'Play';
+      b.onclick = () => { closeHelp(); track('archive_open', {puzzle: n, kind: b.textContent.toLowerCase()}); openArchive(n); };
+      li.appendChild(b);
+    }
+    if (today - n < BOARD_DAYS) {
+      const lb = document.createElement('button'); lb.className = 'btn-yellow lb';
+      lb.textContent = '\u{1F3C6}'; lb.setAttribute('aria-label', 'Daily #' + n + ' leaderboard');
+      lb.onclick = () => openBoard(n);
+      li.appendChild(lb);
+    }
+    list.appendChild(li);
+  }
+  if (!list.children.length) list.innerHTML = '<li>No past puzzles yet. Come back tomorrow!</li>';
+  document.getElementById('pastBox').classList.add('show');
+  list.scrollTop = 0;
+  track('archive_view');
+}
+document.getElementById('pastClose').onclick = closeHelp;
+document.getElementById('pastBox').onclick = e => { if (e.target.id === 'pastBox') closeHelp(); };
+
 // Play more: carry on with the saved game if it isn't finished, otherwise start a new one
 function openPractice() {
   mode = 'practice'; store.mode = 'practice'; saveStore();
@@ -974,7 +1075,7 @@ function endGame() {
   const swaps = moves - wordsMade.length;
   Sound.end(score > startHigh);
   track('game_over', {mode, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
-    ...(mode === 'daily' ? {puzzle: dailyNum} : {})});
+    ...(dailyBoard() ? {puzzle: dailyNum} : {})});
   if (mode === 'daily' && store.leaderboard === 'on') postDailyScore().then(refreshBoardLine);
   const vs = vsInfo();
   if (vs) track('challenge_result', {kind: mode === 'daily' ? 'today' : vs.kind, result: score > vs.target ? 'won' : score === vs.target ? 'tied' : 'lost'});
@@ -983,11 +1084,11 @@ function endGame() {
 // The results card over the board: score, record, best word; for the daily also the streak and when
 // the next puzzle arrives
 function showResult(fresh) {
-  const best = bestWord(), high = document.getElementById('highLine'), daily = mode === 'daily';
+  const best = bestWord(), high = document.getElementById('highLine'), daily = dailyBoard();
   const plural = (n, s) => n + ' ' + s + (n === 1 ? '' : 's');
   const swaps = moves - wordsMade.length;
   const vs = vsInfo();
-  document.getElementById('overTitle').textContent = daily ? 'Daily #' + dailyNum + ' done!'
+  document.getElementById('overTitle').textContent = mode === 'archive' ? 'Past daily #' + dailyNum + ' done!' : daily ? 'Daily #' + dailyNum + ' done!'
     : mode === 'challenge' ? (challenge.kind === 'daily' ? 'Daily #' + challenge.n + ' challenge done!' : 'Challenge done!') : 'Game over';
   document.getElementById('finalScore').textContent = score;
   if (fresh && score > startHigh) { high.textContent = daily ? 'Your best daily score!' : 'New high score!'; high.className = 'new-high'; }
@@ -1006,7 +1107,7 @@ function showResult(fresh) {
       + ' · best: ' + best.word.toUpperCase() + ' (+' + best.pts + ')'
     : 'No words this time';
   const streak = store.streak && store.streak.lastN === dailyNum ? store.streak.count : 0;
-  document.getElementById('streakLine').textContent = daily && streak >= 1 ? '\u{1F525} ' + streak + '-day streak' : '';
+  document.getElementById('streakLine').textContent = mode === 'daily' && streak >= 1 ? '\u{1F525} ' + streak + '-day streak' : '';
   updateCountdown();
   document.getElementById('shareNote').textContent = '';
   prepareShareFile(fresh && score > startHigh);
@@ -1045,6 +1146,7 @@ function shareText() {
   const keycap = n => n > 9 ? (n === 10 ? '\u{1F51F}' : '(' + n + ')') : n +'️⃣';
   const line = moveLog.map(m => m === 'swap' ? '\u{1F504}' : keycap(m.len) + (m.bomb ? '\u{1F4A5}' : ''));
   return (mode === 'daily' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle'
+    : mode === 'archive' ? 'Kablamagram #' + dailyNum + ' \u{1F4A5} daily puzzle (' + dayLabel(dailyNum) + ')'
     : mode === 'challenge' ? 'Kablamagram \u2694\uFE0F challenge from ' + challenge.by : 'Kablamagram \u{1F4A5} 10 moves') + '\n'
     + score + ' points' + (best ? ' · best word: ' + best.word.length + ' letters, +' + best.pts : '') + '\n'
     + (line.length ? 'My ' + line.length + ' moves: ' + (line.length > 20 ? line.slice(0, 20).join('') + '…' : line.join('')) + '\n' : '')
@@ -1130,7 +1232,7 @@ function makeShareCanvas(newHigh) {
   // logo and mode
   drawLogo(ctx, W / 2, 136, 150);
   spacing(3); ctx.font = font(700, 40); ctx.fillStyle = '#e4dcff';
-  ctx.fillText(mode === 'daily' ? 'DAILY PUZZLE #' + dailyNum : mode === 'challenge' ? 'CHALLENGE' : '10 MOVES', W / 2, 272);
+  ctx.fillText(dailyBoard() ? 'DAILY PUZZLE #' + dailyNum : mode === 'challenge' ? 'CHALLENGE' : '10 MOVES', W / 2, 272);
   // score
   spacing(0); ctx.font = font(900, 190); ctx.fillStyle = 'rgba(40,20,80,0.4)'; ctx.fillText(String(score), W / 2, 432);
   ctx.fillStyle = '#fff'; ctx.fillText(String(score), W / 2, 424);
@@ -1262,7 +1364,7 @@ function renderStats() {
   document.getElementById('progressLabel').textContent = 'Moves';
   document.getElementById('progress').textContent = moves + ' / ' + m.moveLimit;
   const vs = vsInfo();
-  document.getElementById('highLabel').textContent = vs ? 'To beat' : mode === 'daily' ? 'Best daily' : 'High';
+  document.getElementById('highLabel').textContent = vs ? 'To beat' : dailyBoard() ? 'Best daily' : 'High';
   document.getElementById('high').textContent = vs ? vs.target : shownHigh();
   const lw = store.longestWord;
   document.getElementById('records').textContent = lw
@@ -1713,7 +1815,7 @@ document.getElementById('shareBtn').onclick = shareResult;
 
 // Challenge button: your nickname (remembered on this device), then the phone's share sheet or a copied link
 function challengeCode() {
-  if (mode === 'daily') return 'd' + dailyNum;
+  if (dailyBoard()) return 'd' + dailyNum;
   if (mode === 'challenge') return challenge.id;
   return gameSeed ? 'b' + (gameSeed >>> 0).toString(36) : null; // a game saved before seeds existed can't be shared
 }
@@ -1753,9 +1855,9 @@ async function postDailyScore(typed) { // typed: the nickname exactly as entered
     return data;
   } catch (e) { return {error: 'offline'}; }
 }
-async function fetchBoard() {
+async function fetchBoard(day = dailyNumber()) {
   try {
-    const r = await fetch(LEADERBOARD_URL + '/board?day=' + dailyNumber() + '&device=' + deviceId());
+    const r = await fetch(LEADERBOARD_URL + '/board?day=' + day + '&device=' + deviceId());
     if (!r.ok) return null;
     return (boardCache = await r.json());
   } catch (e) { return null; }
@@ -1763,13 +1865,15 @@ async function fetchBoard() {
 // the results card's leaderboard button: "Join leaderboard", or your rank once you're on it
 function refreshBoardLine() {
   const line = document.getElementById('boardLine');
-  line.hidden = !(mode === 'daily' && over);
+  line.hidden = !(dailyBoard() && over);
   if (line.hidden) return;
+  if (mode === 'archive') { line.textContent = '\u{1F3C6} Leaderboard'; return; } // that day's, to look at
   const b = boardCache && boardCache.day === dailyNumber() ? boardCache : null;
   line.textContent = b && b.you ? '\u{1F3C6} You\'re #' + b.you.rank + ' of ' + b.total
     : store.leaderboard === 'on' ? '\u{1F3C6} Leaderboard' : '\u{1F3C6} Join leaderboard';
 }
-function renderBoard(b) {
+function renderBoard(b, day = dailyNumber()) {
+  const today = day === dailyNumber();
   const list = document.getElementById('boardList'), you = document.getElementById('boardYou');
   list.innerHTML = '';
   if (!b) { you.textContent = ''; document.getElementById('boardNote').textContent = "Couldn't reach the leaderboard. Check your connection and try again."; return; }
@@ -1781,26 +1885,29 @@ function renderBoard(b) {
     }
     list.appendChild(li);
   }
-  you.textContent = b.you ? "You're #" + b.you.rank + ' of ' + b.total + (b.total === 1 ? ' player' : ' players') + ' today'
-    : b.total ? b.total + (b.total === 1 ? ' player' : ' players') + ' so far today' : 'No scores yet today. Be the first!';
+  const players = b.total + (b.total === 1 ? ' player' : ' players');
+  you.textContent = !today ? (b.you ? "You were #" + b.you.rank + ' of ' + players : b.total ? players + ' that day' : 'No scores for that day.')
+    : b.you ? "You're #" + b.you.rank + ' of ' + players + ' today'
+    : b.total ? players + ' so far today' : 'No scores yet today. Be the first!';
 }
-async function openBoard() {
-  document.getElementById('boardTitle').textContent = 'Daily #' + dailyNumber() + ' leaderboard';
+async function openBoard(day = dailyNumber()) {
+  const today = day === dailyNumber(); // earlier days' boards are only to look at
+  document.getElementById('boardTitle').textContent = 'Daily #' + day + ' leaderboard';
   document.getElementById('boardNote').textContent = '';
   const join = document.getElementById('boardJoin');
-  join.hidden = store.leaderboard === 'on' || !finishedDaily();
+  join.hidden = !today || store.leaderboard === 'on' || !finishedDaily();
   document.getElementById('boardRemove').hidden = store.leaderboard !== 'on';
   document.getElementById('boardName').value = store.playerName || '';
   document.getElementById('boardYou').textContent = 'Loading\u2026';
   document.getElementById('boardList').innerHTML = '';
   document.getElementById('boardBox').classList.add('show');
-  track('leaderboard_view');
+  track('leaderboard_view', today ? {} : {puzzle: day});
   let b = null;
-  if (store.leaderboard === 'on' && finishedDaily() && store.boardPosted !== dailyNumber()) { const r = await postDailyScore(); b = r && !r.error ? r : null; }
-  renderBoard(b || await fetchBoard());
+  if (today && store.leaderboard === 'on' && finishedDaily() && store.boardPosted !== day) { const r = await postDailyScore(); b = r && !r.error ? r : null; }
+  renderBoard(b || await fetchBoard(day), day);
   refreshBoardLine();
 }
-document.getElementById('boardLine').onclick = openBoard;
+document.getElementById('boardLine').onclick = () => openBoard(mode === 'archive' ? dailyNum : dailyNumber());
 document.getElementById('boardClose').onclick = closeHelp;
 document.getElementById('boardBox').onclick = e => { if (e.target.id === 'boardBox') closeHelp(); };
 // "Remove me": deletes all of this device's entries (every day) and stops posting; joining again is allowed
@@ -1851,9 +1958,9 @@ document.getElementById('challengeSend').onclick = async () => {
   const vs = vsInfo();
   const url = SHARE_URL + '/?c=' + challengeCode() + '&s=' + score + '&by=' + encodeURIComponent(name);
   const text = vs ? 'I scored ' + score + ' on ' + vs.by + "'s Kablamagram challenge. Your turn: can you beat me?"
-    : mode === 'daily' ? 'I scored ' + score + ' on Kablamagram Daily #' + dailyNum + '. Can you beat me on the same board?'
+    : dailyBoard() ? 'I scored ' + score + ' on Kablamagram Daily #' + dailyNum + '. Can you beat me on the same board?'
     : 'I scored ' + score + ' on this Kablamagram board. Can you beat me?';
-  const kind = vs ? 'rematch' : mode === 'daily' ? 'daily' : 'board';
+  const kind = vs ? 'rematch' : dailyBoard() ? 'daily' : 'board';
   if (navigator.share) {
     try { await navigator.share({title: 'Kablamagram challenge', text, url}); closeHelp(); track('challenge_created', {kind, method: 'share'}); return; }
     catch (e) { if (e && e.name === 'AbortError') return; }
@@ -1906,7 +2013,9 @@ document.getElementById('confirmNo').onclick = closeHelp;
 confirmBox.onclick = e => { if (e.target === confirmBox) closeHelp(); };
 
 document.getElementById('newBtn').onclick = () => leaveGame(newGame);
-document.querySelectorAll('#modeRow button').forEach(b => b.onclick = () => switchMode(b.dataset.mode));
+// the Past tab opens the list of past puzzles (it stays lit while one is being played)
+document.querySelectorAll('#modeRow button').forEach(b => b.onclick = () =>
+  b.dataset.mode === 'archive' ? !busy && openPastList() : switchMode(b.dataset.mode));
 
 // How to play: the full guide behind the ? button (first-time players get the quick tips instead)
 const helpEl = document.getElementById('help');
@@ -2027,7 +2136,8 @@ const dailyDoneToday = () => !!(store.daily && store.daily.n === dailyNumber() &
 const linkedChallenge = parseChallenge(incomingChallenge);
 if (linkedChallenge) startChallenge(linkedChallenge); // a challenge link comes first
 else if (mode === 'challenge') openChallenge(store.challenge); // carrying on with one
-else if (mode === 'daily' || !dailyDoneToday()) openDaily(); else openPractice();
+else if (mode === 'archive' && dailyDoneToday()) openArchive(store.archiveN); // carrying on with a past puzzle
+else if (mode !== 'practice' || !dailyDoneToday()) openDaily(); else openPractice();
 // safety net when the app goes into the background (not mid-animation, when a word is half-applied)
 document.addEventListener('visibilitychange', () => { if (document.hidden && !busy) saveGame(); });
 fitToScreen();
@@ -2055,7 +2165,7 @@ function openNewDaily() {
   const n = dailyNumber();
   if (n === lastDayOpened) return;
   lastDayOpened = n;
-  if (!busy && mode === 'practice' && !dailyDoneToday()) openDaily();
+  if (!busy && (mode === 'practice' || mode === 'archive') && !dailyDoneToday()) openDaily();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncFromDisk(); updateCountdown(); openNewDaily(); } });
 </script>
