@@ -860,8 +860,15 @@ const Sound = (() => {
 // (just opening the site sets today's board up, which isn't playing it).
 let startTracked = false;
 let step = 0; // changes to the board this game (words, swaps, undos, shuffles): which saved copy is newest
+// Time played, for analytics: the gaps between moves, each capped so a game left open (or resumed
+// later) doesn't count the time away. Saved with the game.
+const MAX_MOVE_GAP = 120000;
+let playMs = 0, lastMoveAt = 0;
 function countMove() {
   moves++; step++;
+  const now = Date.now();
+  if (lastMoveAt) playMs += Math.min(now - lastMoveAt, MAX_MOVE_GAP);
+  lastMoveAt = now;
   if (!startTracked) {
     startTracked = true;
     track('game_start', {mode, ...(dailyBoard() ? {puzzle: dailyNum} : {}), ...(mode === 'challenge' ? {challenge: challenge.kind} : {})});
@@ -870,6 +877,7 @@ function countMove() {
 
 function resetGame() {
   score = 0; moves = 0; step = 0; path = []; busy = false; over = false; startTracked = false;
+  playMs = 0; lastMoveAt = 0;
   wordsMade = []; moveLog = []; lastSwap = null;
   shufflesLeft = MODES[mode].shuffles;
   startHigh = shownHigh();
@@ -915,7 +923,7 @@ function newGame() {
 // mid-game and coming back carries on where you were. For the daily it also means restarting
 // can't be used to get a second try.
 function saveGame() {
-  const state = {grid, score, moves, step, wordsMade, moveLog, shufflesLeft, over, lastSwap};
+  const state = {grid, score, moves, step, wordsMade, moveLog, shufflesLeft, over, lastSwap, playMs};
   if (mode === 'daily') {
     const prev = store.daily; // a new day's daily: the last one goes to Past puzzles (finished, or to finish there)
     if (prev && prev.n !== dailyNum && prev.grid && (prev.over || prev.moves)) {
@@ -940,6 +948,7 @@ function openDaily() {
   step = d.step || moves;
   over = !!d.over; // before drawing, so a finished daily's buttons show greyed out
   startTracked = moves > 0; // counted when it began
+  playMs = d.playMs || 0;
   updateWordsPanel();
   refreshModeUi();
   render();
@@ -960,6 +969,7 @@ function openArchive(n) {
   step = d.step || moves;
   over = !!d.over;
   startTracked = moves > 0;
+  playMs = d.playMs || 0;
   updateWordsPanel();
   refreshModeUi();
   render();
@@ -1019,6 +1029,7 @@ function openPractice() {
   ({grid, score, moves, wordsMade, moveLog, shufflesLeft} = p);
   gameSeed = p.seed || 0; seeded = !!p.seed; // games saved before seeds existed stay unseeded
   startTracked = moves > 0;
+  playMs = p.playMs || 0;
   if (seeded) rngState = p.rngState;
   lastSwap = p.lastSwap || null;
   updateWordsPanel();
@@ -1075,6 +1086,7 @@ function openChallenge(saved) {
   lastSwap = saved.lastSwap || null;
   over = !!saved.over;
   startTracked = moves > 0;
+  playMs = saved.playMs || 0;
   updateWordsPanel();
   refreshModeUi();
   render();
@@ -1106,6 +1118,7 @@ function endGame() {
   const swaps = moves - wordsMade.length;
   Sound.end(score > startHigh);
   track('game_over', {mode, score, words: wordsMade.length, swaps_used: swaps, new_high: score > startHigh,
+    secs_played: Math.round(playMs / 1000),
     ...(dailyBoard() ? {puzzle: dailyNum} : {})});
   if (mode === 'daily' && store.leaderboard === 'on') postDailyScore().then(refreshBoardLine);
   const vs = vsInfo();
